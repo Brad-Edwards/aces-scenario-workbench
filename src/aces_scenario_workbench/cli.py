@@ -47,5 +47,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         _run(["aces-workbench", "createsuperuser", *rest])
     elif command == "manage":
         _run(["aces-workbench", *rest])
+    elif command == "import":
+        _run(["aces-workbench", "import_projection", *rest])
     else:
         _run(["aces-workbench", *args])

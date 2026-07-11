@@ -49,3 +49,9 @@ def test_unknown_command_is_forwarded(monkeypatch):
     calls = _capture(monkeypatch)
     cli.main(["aces-workbench", "migrate"])
     assert calls == [["aces-workbench", "migrate"]]
+
+
+def test_import_maps_to_import_projection(monkeypatch):
+    calls = _capture(monkeypatch)
+    cli.main(["aces-workbench", "import", "proj.yaml", "--project", "demo"])
+    assert calls == [["aces-workbench", "import_projection", "proj.yaml", "--project", "demo"]]
