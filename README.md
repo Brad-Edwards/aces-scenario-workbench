@@ -18,8 +18,13 @@ Requires Python 3.12+.
 pip install aces-scenario-workbench      # or: uv tool install aces-scenario-workbench
 aces-workbench migrate
 aces-workbench createadmin               # create the first administrator
+aces-workbench doctor                    # check readiness
 aces-workbench serve                     # http://127.0.0.1:8000
 ```
+
+Before the first PyPI release, install from a source checkout with
+`pip install .`. See [`docs/setup.md`](docs/setup.md) for the full setup
+walkthrough (projects, invitations, email, password reset).
 
 By default the workbench uses a local SQLite database (`db.sqlite3` in the
 current directory). Point it at PostgreSQL by setting `DATABASE_URL`:
@@ -52,6 +57,10 @@ All configuration is environment-driven:
 | `ACES_WORKBENCH_SECRET_KEY` | random per start | Django secret key (set a stable value outside local dev) |
 | `ACES_WORKBENCH_DEBUG` | `false` | Enable Django debug mode |
 | `ACES_WORKBENCH_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | Comma-separated allowed hosts |
+| `ACES_WORKBENCH_EMAIL_HOST` | _(unset → console)_ | SMTP host; enables email delivery for invitations and password resets |
+
+Email uses a console backend by default (messages print to the server console);
+see [`docs/setup.md`](docs/setup.md) for the full email variable list.
 
 ## CLI
 
@@ -60,6 +69,7 @@ aces-workbench serve [--host H] [--port P]   # run the app (applies migrations f
 aces-workbench migrate                        # apply database migrations
 aces-workbench createadmin                    # create an administrator account
 aces-workbench import <path> --project <slug> # import a pack's ATLAS projection
+aces-workbench doctor                         # report configuration readiness
 aces-workbench manage <command> [...]         # any Django management command
 ```
 
