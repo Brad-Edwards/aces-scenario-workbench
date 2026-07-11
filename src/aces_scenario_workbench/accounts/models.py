@@ -106,7 +106,7 @@ class Invitation(models.Model):
     def is_pending(self) -> bool:
         return self.accepted_at is None and not self.is_expired()
 
-    def accept(self, user) -> None:
+    def accept(self, user: User) -> None:
         from aces_scenario_workbench.workbench.models import Membership
 
         Membership.objects.get_or_create(

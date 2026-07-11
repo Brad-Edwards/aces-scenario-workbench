@@ -12,6 +12,31 @@ from .models import Invitation
 User = get_user_model()
 
 
+def _apply_invitation(
+    request: HttpRequest,
+    invitation: Invitation,
+    existing: User | None,
+    form: AcceptInvitationForm | None,
+) -> HttpResponse | None:
+    """Perform an invitation acceptance; returns a redirect, or None if invalid."""
+    if existing is not None:
+        invitation.accept(existing)
+        messages.success(request, "You have been added to the project. Please sign in.")
+        return redirect("login")
+    if form is not None and form.is_valid():
+        user = User(
+            email=invitation.email,
+            display_name=form.cleaned_data["display_name"],
+            is_active=True,
+        )
+        user.set_password(form.cleaned_data["password1"])
+        user.save()
+        invitation.accept(user)
+        login(request, user)
+        return redirect("dashboard")
+    return None
+
+
 @require_http_methods(["GET", "POST"])
 def invite_accept(request: HttpRequest, token: str) -> HttpResponse:
     """Accept a project invitation, registering a new account when needed."""
@@ -20,29 +45,12 @@ def invite_accept(request: HttpRequest, token: str) -> HttpResponse:
         return render(
             request, "accounts/invite_invalid.html", {"invitation": invitation}, status=410
         )
-
     existing = User.objects.filter(email__iexact=invitation.email).first()
-
+    form = AcceptInvitationForm(request.POST or None) if existing is None else None
     if request.method == "POST":
-        if existing is not None:
-            invitation.accept(existing)
-            messages.success(request, "You have been added to the project. Please sign in.")
-            return redirect("login")
-        form = AcceptInvitationForm(request.POST)
-        if form.is_valid():
-            user = User(
-                email=invitation.email,
-                display_name=form.cleaned_data["display_name"],
-                is_active=True,
-            )
-            user.set_password(form.cleaned_data["password1"])
-            user.save()
-            invitation.accept(user)
-            login(request, user)
-            return redirect("dashboard")
-    else:
-        form = None if existing is not None else AcceptInvitationForm()
-
+        response = _apply_invitation(request, invitation, existing, form)
+        if response is not None:
+            return response
     return render(
         request,
         "accounts/invite_accept.html",
