@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -19,7 +21,7 @@ class UploadError(Exception):
         self.status = status
 
 
-def _read_projection(request: HttpRequest) -> dict:
+def _read_projection(request: HttpRequest) -> dict[str, Any]:
     upload = request.FILES.get("file")
     if upload is None:
         raise UploadError("No file provided.", 400)

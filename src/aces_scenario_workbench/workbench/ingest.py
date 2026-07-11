@@ -30,6 +30,21 @@ class ProjectionError(ValueError):
     """Raised when a projection file cannot be read or parsed."""
 
 
+def _text(entry: dict[str, Any], key: str, default: str = "") -> str:
+    value = entry.get(key)
+    return default if value is None else str(value)
+
+
+def _mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
+    value = data.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _entries(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    value = data.get(key)
+    return value if isinstance(value, list) else []
+
+
 def load_projection(path: Path) -> tuple[dict[str, Any], bytes]:
     """Load a projection from a file, or from a pack directory."""
     if path.is_dir():
@@ -67,9 +82,8 @@ def _digest(data: dict[str, Any]) -> str:
 @transaction.atomic
 def import_projection(project: Project, data: dict[str, Any]) -> tuple[Revision, bool]:
     """Import a projection into ``project``; returns ``(revision, created)``."""
-    pack = str(data.get("pack") or "scenario")
-    mapping_id = str(data.get("mapping_id") or "")
-    framework = data.get("framework") or {}
+    pack = _text(data, "pack", "scenario")
+    framework = _mapping(data, "framework")
 
     scenario, _ = Scenario.objects.get_or_create(
         project=project, slug=slugify(pack) or "scenario", defaults={"name": pack}
@@ -82,15 +96,15 @@ def import_projection(project: Project, data: dict[str, Any]) -> tuple[Revision,
 
     revision = Revision.objects.create(
         scenario=scenario,
-        label=mapping_id or "revision",
-        mapping_id=mapping_id,
+        label=_text(data, "mapping_id", "revision"),
+        mapping_id=_text(data, "mapping_id"),
         content_digest=digest,
-        source_repo=str(data.get("source_oracle") or ""),
-        framework_name=str(framework.get("name") or ""),
-        framework_release=str(framework.get("release") or ""),
+        source_repo=_text(data, "source_oracle"),
+        framework_name=_text(framework, "name"),
+        framework_release=_text(framework, "release"),
         metadata={
-            "experience_contract": data.get("experience_contract") or {},
-            "semantic_binding": data.get("semantic_binding") or {},
+            "experience_contract": _mapping(data, "experience_contract"),
+            "semantic_binding": _mapping(data, "semantic_binding"),
         },
     )
     _load_objects(revision, data)
@@ -99,11 +113,11 @@ def import_projection(project: Project, data: dict[str, Any]) -> tuple[Revision,
 
 def _load_tactics(revision: Revision, data: dict[str, Any]) -> dict[str, Tactic]:
     tactics: dict[str, Tactic] = {}
-    for entry in data.get("tactic_modules") or []:
+    for entry in _entries(data, "tactic_modules"):
         tactic = Tactic.objects.create(
             revision=revision,
-            tactic_id=str(entry["tactic_id"]),
-            name=str(entry.get("name") or ""),
+            tactic_id=_text(entry, "tactic_id"),
+            name=_text(entry, "name"),
         )
         tactics[tactic.tactic_id] = tactic
     return tactics
@@ -112,22 +126,26 @@ def _load_tactics(revision: Revision, data: dict[str, Any]) -> dict[str, Tactic]
 def _load_steps(revision: Revision, data: dict[str, Any]) -> tuple[dict[str, Step], set[str]]:
     steps: dict[str, Step] = {}
     evidence_ids: set[str] = set()
-    for entry in data.get("steps") or []:
+    for entry in _entries(data, "steps"):
         step = Step.objects.create(
             revision=revision,
-            path_step=str(entry["path_step"]),
-            behavior_specification=str(entry.get("aces_behavior_specification") or ""),
-            tier=str(entry.get("tier") or ""),
-            surface=str(entry.get("surface") or ""),
+            path_step=_text(entry, "path_step"),
+            behavior_specification=_text(entry, "aces_behavior_specification"),
+            tier=_text(entry, "tier"),
+            surface=_text(entry, "surface"),
             estimated_minutes=entry.get("estimated_minutes"),
-            objective=str(entry.get("objective") or ""),
-            flag_outcome=str(entry.get("flag_outcome") or ""),
-            justification=str(entry.get("justification") or ""),
+            objective=_text(entry, "objective"),
+            flag_outcome=_text(entry, "flag_outcome"),
+            justification=_text(entry, "justification"),
         )
         steps[step.path_step] = step
-        for evidence_id in entry.get("evidence") or []:
-            evidence_ids.add(str(evidence_id))
+        evidence_ids.update(str(evidence_id) for evidence_id in _sequence(entry, "evidence"))
     return steps, evidence_ids
+
+
+def _sequence(entry: dict[str, Any], key: str) -> list[Any]:
+    value = entry.get(key)
+    return value if isinstance(value, list) else []
 
 
 def _load_evidence(revision: Revision, evidence_ids: set[str]) -> dict[str, Evidence]:
@@ -137,6 +155,10 @@ def _load_evidence(revision: Revision, evidence_ids: set[str]) -> dict[str, Evid
     }
 
 
+def _technique_tactics(entry: dict[str, Any], tactics: dict[str, Tactic]) -> list[Tactic]:
+    return [tactics[str(tid)] for tid in _sequence(entry, "tactics") if str(tid) in tactics]
+
+
 def _load_techniques(
     revision: Revision,
     data: dict[str, Any],
@@ -144,20 +166,20 @@ def _load_techniques(
     steps: dict[str, Step],
     evidence: dict[str, Evidence],
 ) -> None:
-    for entry in data.get("technique_catalog") or []:
+    for entry in _entries(data, "technique_catalog"):
         technique = Technique.objects.create(
             revision=revision,
-            technique_id=str(entry["id"]),
-            name=str(entry.get("name") or ""),
-            surface=str(entry.get("surface") or ""),
-            relationship=str(entry.get("relationship") or ""),
-            coverage_status=str(entry.get("coverage_status") or ""),
-            planned_action=str(entry.get("planned_action") or ""),
-            rationale=str(entry.get("rationale") or ""),
-            step=steps.get(str(entry.get("challenge_step") or "")),
-            evidence=evidence.get(str(entry.get("evidence") or "")),
+            technique_id=_text(entry, "id"),
+            name=_text(entry, "name"),
+            surface=_text(entry, "surface"),
+            relationship=_text(entry, "relationship"),
+            coverage_status=_text(entry, "coverage_status"),
+            planned_action=_text(entry, "planned_action"),
+            rationale=_text(entry, "rationale"),
+            step=steps.get(_text(entry, "challenge_step")),
+            evidence=evidence.get(_text(entry, "evidence")),
         )
-        linked = [tactics[str(tid)] for tid in (entry.get("tactics") or []) if str(tid) in tactics]
+        linked = _technique_tactics(entry, tactics)
         if linked:
             technique.tactics.set(linked)
 
@@ -165,8 +187,9 @@ def _load_techniques(
 def _load_objects(revision: Revision, data: dict[str, Any]) -> None:
     tactics = _load_tactics(revision, data)
     steps, evidence_ids = _load_steps(revision, data)
-    for entry in data.get("technique_catalog") or []:
-        if entry.get("evidence"):
-            evidence_ids.add(str(entry["evidence"]))
+    for entry in _entries(data, "technique_catalog"):
+        evidence_id = _text(entry, "evidence")
+        if evidence_id:
+            evidence_ids.add(evidence_id)
     evidence = _load_evidence(revision, evidence_ids)
     _load_techniques(revision, data, tactics, steps, evidence)
