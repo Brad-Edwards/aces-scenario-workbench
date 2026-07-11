@@ -1,0 +1,23 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Privacy — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <h1>Privacy</h1>
+  <p>
+    The workbench stores the account data you provide (email address and
+    optional display name) and the review activity you create (comments,
+    decisions, review-state changes, and membership records). This data is used
+    only to operate the review workspace.
+  </p>
+  <p>
+    You can download a copy of your personal data or delete your account at any
+    time from your <a href="{% url 'account' %}">account page</a>. Deleting your
+    account removes your account record and the comments and decisions you
+    authored. Activity-stream entries are retained with your identity removed.
+  </p>
+  <p>
+    Scenario content itself originates from ACES scenario packs and is governed
+    by those packs, not by the workbench.
+  </p>
+{% endblock %}

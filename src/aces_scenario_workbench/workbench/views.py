@@ -22,6 +22,12 @@ def landing(request: HttpRequest) -> HttpResponse:
     return render(request, "workbench/landing.html")
 
 
+@require_GET
+def privacy(request: HttpRequest) -> HttpResponse:
+    """Privacy notice."""
+    return render(request, "workbench/privacy.html")
+
+
 @login_required
 @require_GET
 def dashboard(request: HttpRequest) -> HttpResponse:

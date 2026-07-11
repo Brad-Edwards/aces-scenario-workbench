@@ -113,6 +113,7 @@ LOGOUT_REDIRECT_URL = "landing"
 # Baseline security posture. Cookie/redirect hardening defaults follow DEBUG and
 # can be overridden per deployment.
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"

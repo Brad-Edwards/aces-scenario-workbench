@@ -59,8 +59,13 @@ All configuration is environment-driven:
 aces-workbench serve [--host H] [--port P]   # run the app (applies migrations first)
 aces-workbench migrate                        # apply database migrations
 aces-workbench createadmin                    # create an administrator account
+aces-workbench import <path> --project <slug> # import a pack's ATLAS projection
 aces-workbench manage <command> [...]         # any Django management command
 ```
+
+Administrators create projects and invite members from the Django admin
+(`/admin/`); import a scenario pack's ATLAS technique projection with
+`aces-workbench import <pack-path> --project <slug>`.
 
 ## Development
 
@@ -73,6 +78,18 @@ make hooks             # activate commit-time hooks (once per clone)
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the developer workflow.
+
+## Deployment
+
+Run from a single container against PostgreSQL, or locally against SQLite. See
+[`docs/deployment.md`](docs/deployment.md) for local Docker Compose and an AWS
+(ca-central-1) path.
+
+## Privacy
+
+The workbench stores account data and the review activity you create. Signed-in
+users can export or delete their own data from the account page; the in-app
+privacy notice is at `/privacy/`.
 
 ## License
 

@@ -13,4 +13,7 @@ urlpatterns = [
     ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("invite/<str:token>/", views.invite_accept, name="invite-accept"),
+    path("me/", views.account, name="account"),
+    path("me/export/", views.account_export, name="account-export"),
+    path("me/delete/", views.account_delete, name="account-delete"),
 ]

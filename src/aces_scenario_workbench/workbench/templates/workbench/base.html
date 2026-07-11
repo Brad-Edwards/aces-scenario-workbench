@@ -27,6 +27,7 @@
       <nav class="topbar-actions" aria-label="Primary">
         {% if user.is_authenticated %}
           <a href="{% url 'dashboard' %}">Projects</a>
+          <a href="{% url 'account' %}">Account</a>
         {% endif %}
         <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">
           Toggle theme

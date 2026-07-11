@@ -10,6 +10,7 @@ _OBJ = _REV + "objects/<str:object_type>/<str:object_stable_id>/"
 urlpatterns = [
     path("", views.landing, name="landing"),
     path("healthz", views.healthz, name="healthz"),
+    path("privacy/", views.privacy, name="privacy"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("projects/<slug:slug>/", views.project_detail, name="project-detail"),
     path("projects/<slug:slug>/activity/", views.project_activity, name="project-activity"),
