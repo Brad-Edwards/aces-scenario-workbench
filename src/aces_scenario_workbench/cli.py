@@ -49,7 +49,3 @@ def main(argv: Sequence[str] | None = None) -> None:
         _run(["aces-workbench", *rest])
     else:
         _run(["aces-workbench", *args])
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main()
