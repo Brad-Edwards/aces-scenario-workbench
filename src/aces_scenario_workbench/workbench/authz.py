@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .models import Membership, Project
+from .models import Membership, Project, Role
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 
     UserOrAnon = AbstractBaseUser | AnonymousUser
+
+CONTRIBUTOR_ROLES = frozenset({Role.AUTHOR, Role.REVIEWER, Role.ADMINISTRATOR})
 
 
 def user_membership(user: UserOrAnon, project: Project) -> Membership | None:
@@ -29,3 +31,8 @@ def user_role(user: UserOrAnon, project: Project) -> str | None:
 
 def is_member(user: UserOrAnon, project: Project) -> bool:
     return user_membership(user, project) is not None
+
+
+def can_contribute(user: UserOrAnon, project: Project) -> bool:
+    """Whether the user may comment, set review state, or record decisions."""
+    return user_role(user, project) in CONTRIBUTOR_ROLES

@@ -6,6 +6,7 @@
   <p class="breadcrumb"><a href="{% url 'dashboard' %}">Projects</a> / {{ project.name }}</p>
   <h1>{{ project.name }}</h1>
   {% if project.description %}<p class="subhead">{{ project.description }}</p>{% endif %}
+  <p><a href="{% url 'project-activity' project.slug %}">Project activity</a></p>
 
   {% for scenario in scenarios %}
     <section class="panel">

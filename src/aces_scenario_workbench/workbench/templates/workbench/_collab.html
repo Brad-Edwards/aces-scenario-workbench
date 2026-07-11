@@ -1,0 +1,68 @@
+{% comment %}
+Collaboration panel for one scenario object. Expects: project, scenario,
+revision, object_type, object_stable_id, review_state, review_statuses,
+decisions, decision_types, comments, can_contribute.
+{% endcomment %}
+<section class="panel" aria-labelledby="review-heading">
+  <h2 id="review-heading">Review</h2>
+  <p>Status: <strong>{% if review_state %}{{ review_state.get_status_display }}{% else %}Unreviewed{% endif %}</strong></p>
+  {% if can_contribute %}
+    <form method="post" action="{% url 'object-review-state' project.slug scenario.slug revision.pk object_type object_stable_id %}">
+      {% csrf_token %}
+      <label for="review-status">Set status</label>
+      <select id="review-status" name="status">
+        {% for value, label in review_statuses %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <button type="submit">Update status</button>
+    </form>
+  {% endif %}
+</section>
+
+<section class="panel" aria-labelledby="decisions-heading">
+  <h2 id="decisions-heading">Decisions</h2>
+  <ul class="card-list">
+    {% for decision in decisions %}
+      <li>
+        <strong>{{ decision.get_decision_display }}</strong>
+        by {{ decision.author.get_short_name }} on {{ decision.created_at|date:"Y-m-d" }}
+        {% if decision.rationale %}<br>{{ decision.rationale }}{% endif %}
+      </li>
+    {% empty %}
+      <li class="empty">No decisions recorded.</li>
+    {% endfor %}
+  </ul>
+  {% if can_contribute %}
+    <form method="post" action="{% url 'object-decision' project.slug scenario.slug revision.pk object_type object_stable_id %}">
+      {% csrf_token %}
+      <label for="decision-type">Decision</label>
+      <select id="decision-type" name="decision">
+        {% for value, label in decision_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <label for="decision-rationale">Rationale (optional)</label>
+      <textarea id="decision-rationale" name="rationale" rows="2"></textarea>
+      <button type="submit">Record decision</button>
+    </form>
+  {% endif %}
+</section>
+
+<section class="panel" aria-labelledby="comments-heading">
+  <h2 id="comments-heading">Comments</h2>
+  <ul class="card-list">
+    {% for comment in comments %}
+      <li>
+        <strong>{{ comment.author.get_short_name }}</strong> on {{ comment.created_at|date:"Y-m-d H:i" }}
+        <br>{{ comment.body|linebreaksbr }}
+      </li>
+    {% empty %}
+      <li class="empty">No comments yet.</li>
+    {% endfor %}
+  </ul>
+  {% if can_contribute %}
+    <form method="post" action="{% url 'object-comment' project.slug scenario.slug revision.pk object_type object_stable_id %}">
+      {% csrf_token %}
+      <label for="comment-body">Add a comment</label>
+      <textarea id="comment-body" name="body" rows="3" required></textarea>
+      <button type="submit">Comment</button>
+    </form>
+  {% endif %}
+</section>

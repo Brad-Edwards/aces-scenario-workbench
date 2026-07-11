@@ -1,0 +1,23 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Activity — {{ project.name }}{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb">
+    <a href="{% url 'dashboard' %}">Projects</a> /
+    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> / Activity
+  </p>
+  <h1>Activity</h1>
+  <ul class="card-list">
+    {% for event in events %}
+      <li>
+        {{ event.created_at|date:"Y-m-d H:i" }} —
+        {% if event.actor %}{{ event.actor.get_short_name }}{% else %}A former member{% endif %}
+        {{ event.verb }}
+        {% if event.object_stable_id %}<span class="evidence">({{ event.object_type }} {{ event.object_stable_id }})</span>{% endif %}
+      </li>
+    {% empty %}
+      <li class="empty">No activity yet.</li>
+    {% endfor %}
+  </ul>
+{% endblock %}
