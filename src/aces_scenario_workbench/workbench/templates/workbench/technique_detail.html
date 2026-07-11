@@ -1,0 +1,47 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}{{ object.technique_id }} — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb">
+    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
+    <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
+    Technique
+  </p>
+  <h1>{{ object.technique_id }}</h1>
+  <p class="subhead">{{ object.name }}</p>
+
+  <section class="panel">
+    <dl class="facts">
+      <dt>Surface</dt><dd>{{ object.surface|default:"—" }}</dd>
+      <dt>Coverage status</dt><dd>{{ object.coverage_status|default:"—" }}</dd>
+      <dt>Relationship</dt><dd>{{ object.relationship|default:"—" }}</dd>
+      <dt>Sub-technique</dt><dd>{{ object.is_subtechnique|yesno }}</dd>
+      <dt>Tactics</dt>
+      <dd>
+        {% for tactic in object.tactics.all %}
+          <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }}</a>
+        {% empty %}—{% endfor %}
+      </dd>
+      <dt>Module</dt>
+      <dd>
+        {% if object.step %}
+          <a href="{% url 'step-detail' project.slug scenario.slug revision.pk object.step.path_step %}">Module {{ object.step.path_step }}</a>
+        {% else %}—{% endif %}
+      </dd>
+      <dt>Evidence</dt>
+      <dd>
+        {% if object.evidence %}
+          <a class="evidence" href="{% url 'evidence-detail' project.slug scenario.slug revision.pk object.evidence.evidence_id %}">{{ object.evidence.evidence_id }}</a>
+        {% else %}—{% endif %}
+      </dd>
+    </dl>
+  </section>
+
+  {% if object.planned_action %}
+    <section class="panel"><h2>Planned action</h2><p>{{ object.planned_action }}</p></section>
+  {% endif %}
+  {% if object.rationale %}
+    <section class="panel"><h2>Rationale</h2><p>{{ object.rationale }}</p></section>
+  {% endif %}
+{% endblock %}

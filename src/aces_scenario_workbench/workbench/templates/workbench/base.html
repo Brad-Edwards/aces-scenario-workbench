@@ -1,18 +1,47 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="{% static 'workbench/app.css' %}">
     <title>{% block title %}ACES Scenario Workbench{% endblock %}</title>
+    <script>
+      (function () {
+        try {
+          const stored = globalThis.localStorage.getItem("aces-theme");
+          const dark = globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
+        } catch (error) { console.warn("Theme preference unavailable", error); }
+      })();
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to main content</a>
-    <header>
-      <strong>ACES Scenario Workbench</strong>
+    <header class="topbar">
+      <div class="brand">
+        <strong><a href="{% url 'landing' %}">ACES Scenario Workbench</a></strong>
+        <span>Collaborative review for ACES scenario packs</span>
+      </div>
+      <nav class="topbar-actions" aria-label="Primary">
+        {% if user.is_authenticated %}
+          <a href="{% url 'dashboard' %}">Projects</a>
+        {% endif %}
+        <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">
+          Toggle theme
+        </button>
+        {% if user.is_authenticated %}
+          <form class="logout-inline" method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit">Sign out</button>
+          </form>
+        {% endif %}
+      </nav>
     </header>
     <main id="main">
       {% block content %}{% endblock %}
     </main>
+    <script src="{% static 'workbench/app.js' %}" defer></script>
   </body>
 </html>
