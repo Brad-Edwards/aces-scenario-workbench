@@ -1,0 +1,97 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}{{ scenario.name }} {{ revision.label }} — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb">
+    <a href="{% url 'dashboard' %}">Projects</a> /
+    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
+    {{ scenario.name }}
+  </p>
+  <h1>{{ scenario.name }}</h1>
+  <p class="subhead">
+    Revision {{ revision.label }}{% if revision.framework_name %} · {{ revision.framework_name }} {{ revision.framework_release }}{% endif %}
+  </p>
+
+  <div class="summary-grid">
+    <div class="summary-item"><b>{{ counts.tactics }}</b><span>Tactics</span></div>
+    <div class="summary-item"><b>{{ counts.techniques }}</b><span>Techniques</span></div>
+    <div class="summary-item"><b>{{ counts.steps }}</b><span>Modules</span></div>
+    <div class="summary-item"><b>{{ counts.evidence }}</b><span>Evidence</span></div>
+  </div>
+
+  <h2>Techniques</h2>
+  <div class="table-wrap">
+    <table>
+      <caption>ATLAS techniques projected for this revision.</caption>
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Name</th>
+          <th scope="col">Tactics</th>
+          <th scope="col">Module</th>
+          <th scope="col">Evidence</th>
+          <th scope="col">Coverage</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for technique in techniques %}
+          <tr>
+            <td class="tech-id">
+              <a href="{% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }}</a>
+            </td>
+            <td>{{ technique.name }}</td>
+            <td>
+              {% for tactic in technique.tactics.all %}
+                <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }}</a>
+              {% endfor %}
+            </td>
+            <td>
+              {% if technique.step %}
+                <a href="{% url 'step-detail' project.slug scenario.slug revision.pk technique.step.path_step %}">{{ technique.step.path_step }}</a>
+              {% endif %}
+            </td>
+            <td class="evidence">
+              {% if technique.evidence %}
+                <a href="{% url 'evidence-detail' project.slug scenario.slug revision.pk technique.evidence.evidence_id %}">{{ technique.evidence.evidence_id }}</a>
+              {% endif %}
+            </td>
+            <td>{{ technique.coverage_status }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="empty">No techniques in this revision.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Modules</h2>
+  <div class="module-grid">
+    {% for step in steps %}
+      <article class="module" data-tier="{{ step.tier }}">
+        <div class="module-head">
+          <h3>
+            <a href="{% url 'step-detail' project.slug scenario.slug revision.pk step.path_step %}">Module {{ step.path_step }}</a>
+          </h3>
+          <span class="tier" data-tier="{{ step.tier }}">{{ step.tier }}</span>
+        </div>
+        <p class="module-objective">{{ step.objective }}</p>
+        <dl class="facts">
+          <dt>Surface</dt><dd>{{ step.surface }}</dd>
+          {% if step.estimated_minutes %}<dt>Estimated minutes</dt><dd>{{ step.estimated_minutes }}</dd>{% endif %}
+        </dl>
+      </article>
+    {% empty %}
+      <p class="empty">No modules in this revision.</p>
+    {% endfor %}
+  </div>
+
+  <h2>Tactics</h2>
+  <ul class="card-list">
+    {% for tactic in tactics %}
+      <li>
+        <a href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }} — {{ tactic.name }}</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock %}

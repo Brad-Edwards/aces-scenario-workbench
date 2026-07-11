@@ -4,10 +4,18 @@ from django.urls import path
 
 from . import api, views
 
+_REV = "projects/<slug:project_slug>/scenarios/<slug:scenario_slug>/revisions/<int:revision_pk>/"
+
 urlpatterns = [
     path("", views.landing, name="landing"),
     path("healthz", views.healthz, name="healthz"),
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("projects/<slug:slug>/", views.project_detail, name="project-detail"),
+    path(_REV, views.revision_overview, name="revision-overview"),
+    path(_REV + "techniques/<str:technique_id>/", views.technique_detail, name="technique-detail"),
+    path(_REV + "tactics/<str:tactic_id>/", views.tactic_detail, name="tactic-detail"),
+    path(_REV + "modules/<str:path_step>/", views.step_detail, name="step-detail"),
+    path(_REV + "evidence/<str:evidence_id>/", views.evidence_detail, name="evidence-detail"),
     path(
         "api/projects/<slug:slug>/revisions",
         api.upload_revision,
