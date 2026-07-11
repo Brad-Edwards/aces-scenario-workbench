@@ -7,9 +7,9 @@ reviewing ACES scenario packs. Machine-readable ACES and pack projections remain
 the source of truth; the workbench makes their objects, relationships, revision
 history, validation results, and review conversations navigable.
 
-The initial KeplerOps prototype demonstrated that the combined scenario, ATLAS,
-evidence, and progression model is substantially more useful when presented as
-an interactive system than as a large YAML ledger or generated document.
+An early prototype demonstrated that the combined scenario, ATLAS, evidence,
+and progression model is substantially more useful when presented as an
+interactive system than as a large YAML ledger or generated document.
 
 ## Primary Users
 
@@ -78,7 +78,7 @@ Authorization must be enforceable per scenario or project, not only per deployme
 
 ## Initial Implementation Slices
 
-1. Define and validate a versioned review-bundle schema from the KeplerOps fixture.
+1. Define and validate a versioned review-bundle schema from a sample ATLAS projection.
 2. Select the application stack and establish authenticated users and projects.
 3. Ingest immutable scenario revisions and render the prototype overview.
 4. Add stable detail routes for every object and relationship type.
@@ -86,9 +86,9 @@ Authorization must be enforceable per scenario or project, not only per deployme
 6. Add revision comparison and explicit comment carry-forward.
 7. Add proposed-change export without direct or silent source mutation.
 
-## Seed Provenance
+## Sample Data
 
-`fixtures/keplerops-ai/atlas-technique-projection.yaml` and `prototype/index.html`
-are snapshots exported from `autarchy-ai/penumbra-scenarios`, KeplerOps work on
-issue 352, at commit `bd185a9`. They exist to preserve the working concept and
-provide an implementation fixture. The scenario pack remains authoritative.
+`fixtures/sample-scenario/atlas-technique-projection.yaml` is a small, neutral
+ATLAS technique projection used for local development and tests. It is
+illustrative only; a real ACES scenario pack remains the authoritative source
+of scenario content.

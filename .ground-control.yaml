@@ -1,0 +1,33 @@
+schema_version: 1
+project: aces-scenario-workbench
+github_repo: Brad-Edwards/aces-scenario-workbench
+workflow:
+  test_command: uv run pytest
+  completion_command: uv run pytest
+  lint_command: uv run ruff check .
+  format_command: uv run ruff format .
+  review_disposition:
+    enabled: true
+    mode: authoritative
+    max_auto_overrides: 1
+    judge:
+      enabled: true
+docs:
+  adr_dir: docs/decisions/adrs/
+example_paths:
+  source: prototype/
+  test: tests/
+requirements:
+  uid_examples:
+    - WB-001
+    - ADR-001
+routing:
+  enabled: true
+  default_provider: claude
+  default_fallback: parent
+  stages: {}
+sonarcloud:
+  project_key: Brad-Edwards_aces-scenario-workbench
+  organization: brad-edwards
+rules:
+  plan_rules: .gc/plan-rules.md
