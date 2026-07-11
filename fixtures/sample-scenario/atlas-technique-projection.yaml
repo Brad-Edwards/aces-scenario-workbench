@@ -1,0 +1,78 @@
+# Neutral, synthetic ATLAS technique projection for local development and tests.
+# Illustrative only. A real ACES scenario pack remains the authoritative source.
+schema_version: 1
+mapping_id: sample-scenario-atlas-2026-06
+pack: sample-scenario
+source_oracle: oracle/objectives.yaml
+framework:
+  name: MITRE ATLAS
+  release: '2026.06'
+  source_url: https://github.com/mitre-atlas/atlas-data
+  retrieved: '2026-07-11'
+experience_contract:
+  coverage_target: sample_subset
+  catalog_technique_count: 3
+steps:
+- path_step: '1'
+  aces_behavior_specification: module-01-recon
+  tier: quick
+  surface: research-workbench
+  estimated_minutes: 15
+  objective: Gather public information about the target model.
+  evidence:
+  - ev-recon
+  flag_outcome: recon
+  justification: Directly selectable reconnaissance action.
+- path_step: '2'
+  aces_behavior_specification: module-02-evasion
+  tier: intermediate
+  surface: model-evasion
+  estimated_minutes: 30
+  objective: Cross a pinned model decision boundary.
+  evidence:
+  - ev-evasion
+  flag_outcome: evasion
+  justification: Directly selectable evasion action with a paired control.
+tactic_modules:
+- tactic_id: AML.TA0002
+  name: Reconnaissance
+  challenge_steps:
+  - '1'
+- tactic_id: AML.TA0007
+  name: Defense Evasion
+  challenge_steps:
+  - '2'
+technique_catalog:
+- id: AML.T0000
+  name: Search Open Technical Databases
+  tactics:
+  - AML.TA0002
+  challenge_step: '1'
+  surface: research-workbench
+  evidence: ev-recon
+  relationship: planned_variant
+  coverage_status: planned
+  planned_action: Search public sources to profile the target model.
+  rationale: A reconnaissance variant satisfied only by ev-recon.
+- id: AML.T0000.000
+  name: Journals and Conference Proceedings
+  tactics:
+  - AML.TA0002
+  challenge_step: '1'
+  surface: research-workbench
+  evidence: ev-recon
+  relationship: planned_variant
+  coverage_status: planned
+  planned_action: Review published literature to profile the target model.
+  rationale: A reconnaissance sub-technique satisfied only by ev-recon.
+- id: AML.T0015
+  name: Evade AI Model
+  tactics:
+  - AML.TA0007
+  challenge_step: '2'
+  surface: model-evasion
+  evidence: ev-evasion
+  relationship: planned_variant
+  coverage_status: planned
+  planned_action: Craft an input that crosses the pinned decision boundary.
+  rationale: An evasion variant satisfied only by ev-evasion.
