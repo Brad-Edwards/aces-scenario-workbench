@@ -1,0 +1,20 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Your projects — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <h1>Your projects</h1>
+  {% if projects %}
+    <ul>
+      {% for project in projects %}
+        <li>{{ project.name }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>You are not a member of any projects yet.</p>
+  {% endif %}
+  <form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button type="submit">Sign out</button>
+  </form>
+{% endblock %}

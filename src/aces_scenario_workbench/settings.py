@@ -107,8 +107,8 @@ WHITENOISE_USE_FINDERS = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "dashboard"
+LOGOUT_REDIRECT_URL = "landing"
 
 # Baseline security posture. Cookie/redirect hardening defaults follow DEBUG and
 # can be overridden per deployment.
