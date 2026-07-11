@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login
-from django.http import HttpRequest, HttpResponse
+from django.contrib.auth import get_user_model, login, logout
+from django.contrib.auth.decorators import login_required
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .forms import AcceptInvitationForm
 from .models import Invitation
@@ -56,3 +59,60 @@ def invite_accept(request: HttpRequest, token: str) -> HttpResponse:
         "accounts/invite_accept.html",
         {"form": form, "invitation": invitation, "existing": existing is not None},
     )
+
+
+def _export_payload(user: User) -> dict[str, Any]:
+    return {
+        "email": user.email,
+        "display_name": user.display_name,
+        "date_joined": user.date_joined.isoformat(),
+        "memberships": [
+            {"project": m.project.slug, "role": m.role}
+            for m in user.memberships.select_related("project")
+        ],
+        "comments": [
+            {
+                "object_type": c.object_type,
+                "object_stable_id": c.object_stable_id,
+                "body": c.body,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in user.comments.all()
+        ],
+        "decisions": [
+            {
+                "object_type": d.object_type,
+                "object_stable_id": d.object_stable_id,
+                "decision": d.decision,
+                "rationale": d.rationale,
+                "created_at": d.created_at.isoformat(),
+            }
+            for d in user.decisions.all()
+        ],
+    }
+
+
+@login_required
+@require_GET
+def account(request: HttpRequest) -> HttpResponse:
+    """The signed-in user's account: data export and deletion."""
+    return render(request, "accounts/account.html")
+
+
+@login_required
+@require_GET
+def account_export(request: HttpRequest) -> JsonResponse:
+    """Download the signed-in user's personal data (GDPR access)."""
+    response = JsonResponse(_export_payload(request.user), json_dumps_params={"indent": 2})
+    response["Content-Disposition"] = 'attachment; filename="aces-workbench-account.json"'
+    return response
+
+
+@login_required
+@require_POST
+def account_delete(request: HttpRequest) -> HttpResponse:
+    """Delete the signed-in user's account and personal content (GDPR erasure)."""
+    user = request.user
+    logout(request)
+    user.delete()
+    return redirect("landing")
