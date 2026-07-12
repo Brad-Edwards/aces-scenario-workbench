@@ -15,7 +15,7 @@ workbench database. The workbench never writes changes back into a pack.
 Requires Python 3.12+.
 
 ```bash
-pip install aces-scenario-workbench      # or: uv tool install aces-scenario-workbench
+pip install aces-workbench      # or: uv tool install aces-workbench
 aces-workbench migrate
 aces-workbench createadmin               # create the first administrator
 aces-workbench doctor                    # check readiness

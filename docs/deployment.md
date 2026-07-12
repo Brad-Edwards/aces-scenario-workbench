@@ -6,7 +6,7 @@ against PostgreSQL, or locally from a pip install against SQLite.
 ## Local (SQLite, no container)
 
 ```bash
-pip install aces-scenario-workbench
+pip install aces-workbench
 aces-workbench migrate
 aces-workbench createadmin
 aces-workbench serve
@@ -49,8 +49,8 @@ The image is deployable to AWS in the Canada Central region using the
 
    ```bash
    aws --profile catalyst-dev --region ca-central-1 ecr create-repository \
-     --repository-name aces-scenario-workbench
-   docker build -t aces-scenario-workbench .
+     --repository-name aces-workbench
+   docker build -t aces-workbench .
    # tag and push to the ECR repository URI from the previous command
    ```
 
