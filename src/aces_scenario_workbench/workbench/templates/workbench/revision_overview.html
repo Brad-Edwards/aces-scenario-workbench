@@ -16,10 +16,10 @@
 {% endblock %}
 
 {% block secondary_nav %}
-  <nav class="tabs" aria-label="Review views">
-    <button class="tab" type="button" data-view="overview" aria-selected="true">Overview</button>
-    <button class="tab" type="button" data-view="techniques" aria-selected="false">Techniques</button>
-    <button class="tab" type="button" data-view="modules" aria-selected="false">Modules</button>
+  <nav class="tabs" role="tablist" aria-label="Review views">
+    <button id="tab-overview" class="tab" type="button" role="tab" data-view="overview" aria-selected="true" aria-controls="view-overview">Overview</button>
+    <button id="tab-techniques" class="tab" type="button" role="tab" data-view="techniques" aria-selected="false" aria-controls="view-techniques">Techniques</button>
+    <button id="tab-modules" class="tab" type="button" role="tab" data-view="modules" aria-selected="false" aria-controls="view-modules">Modules</button>
   </nav>
 {% endblock %}
 
@@ -31,7 +31,7 @@
     {{ revision.label }}
   </p>
 
-  <section class="view" id="view-overview">
+  <section class="view" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
     <h1>Coverage overview</h1>
     <p class="subhead">
       {{ scenario.name }} {{ revision.label }}{% if revision.framework_name %} · {{ revision.framework_name }} {{ revision.framework_release }}{% endif %}
@@ -91,7 +91,7 @@
     </div>
   </section>
 
-  <section class="view" id="view-techniques" hidden>
+  <section class="view" id="view-techniques" role="tabpanel" aria-labelledby="tab-techniques" hidden>
     <h1>Technique projection</h1>
     <p class="subhead">
       Exact relationships, module assignments, evidence boundaries, and planned
@@ -201,7 +201,7 @@
     {% endif %}
   </section>
 
-  <section class="view" id="view-modules" hidden>
+  <section class="view" id="view-modules" role="tabpanel" aria-labelledby="tab-modules" hidden>
     <h1>Challenge modules</h1>
     <p class="subhead">
       Progression, behavior joins, evidence, outcomes, and technique allocation.
@@ -210,7 +210,7 @@
     <div class="module-grid">
       {% for step in steps %}
         {% url 'step-detail' project.slug scenario.slug revision.pk step.path_step as step_url %}
-        <article class="module clickable-card" data-tier="{{ step.tier }}" data-href="{{ step_url }}" tabindex="0">
+        <article class="module clickable-card" data-tier="{{ step.tier }}" data-href="{{ step_url }}">
           <div class="module-head">
             <div>
               <div class="module-number">Module {{ step.path_step }}</div>
