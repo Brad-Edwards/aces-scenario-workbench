@@ -6,10 +6,14 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from aces_scenario_workbench.workbench.ingest import import_projection, load_projection
-from aces_scenario_workbench.workbench.models import Membership, Project, Role
+from aces_scenario_workbench.workbench.models import Membership, Project, Role, Technique
 
 User = get_user_model()
 SAMPLE = settings.BASE_DIR / "fixtures" / "sample-scenario" / "atlas-technique-projection.yaml"
+
+
+def _link(project, revision, technique_id):
+    return f"/projects/{project.slug}/scenarios/{revision.scenario.slug}/revisions/{revision.pk}/techniques/{technique_id}/".encode()
 
 
 @pytest.fixture
@@ -96,3 +100,71 @@ def test_landing_has_theme_toggle_and_stylesheet(client):
     response = client.get(reverse("landing"))
     assert b"data-theme-toggle" in response.content
     assert b"workbench/app.css" in response.content
+
+
+def test_revision_overview_has_filter_toolbar(client, workspace):
+    project, revision, member = workspace
+    client.force_login(member)
+    response = client.get(reverse("revision-overview", args=_args(project, revision)))
+    for field in (b'name="q"', b'name="module"', b'name="tactic"', b'name="level"'):
+        assert field in response.content
+    assert b"Showing 3 of 3 techniques" in response.content
+
+
+def test_technique_search_matches_name_and_evidence_and_action(client, workspace):
+    project, revision, member = workspace
+    client.force_login(member)
+    url = reverse("revision-overview", args=_args(project, revision))
+    for query in ("Journals", "ev-recon", "Review published literature"):
+        response = client.get(url, {"q": query})
+        assert _link(project, revision, "AML.T0000.000") in response.content, query
+        assert _link(project, revision, "AML.T0015") not in response.content, query
+
+
+def test_technique_filters_by_tactic_module_and_level(client, workspace):
+    project, revision, member = workspace
+    client.force_login(member)
+    url = reverse("revision-overview", args=_args(project, revision))
+    for params in ({"tactic": "AML.TA0007"}, {"module": "2"}, {"level": "intermediate"}):
+        response = client.get(url, params)
+        assert _link(project, revision, "AML.T0015") in response.content, params
+        assert _link(project, revision, "AML.T0000") not in response.content, params
+        assert _link(project, revision, "AML.T0000.000") not in response.content, params
+
+
+def test_technique_filters_combine(client, workspace):
+    project, revision, member = workspace
+    client.force_login(member)
+    url = reverse("revision-overview", args=_args(project, revision))
+    response = client.get(url, {"tactic": "AML.TA0002", "level": "quick"})
+    assert b"Showing 2 of 3 techniques matching your filters" in response.content
+    assert _link(project, revision, "AML.T0015") not in response.content
+
+
+def test_technique_search_no_match(client, workspace):
+    project, revision, member = workspace
+    client.force_login(member)
+    url = reverse("revision-overview", args=_args(project, revision))
+    response = client.get(url, {"q": "no-such-technique-xyz"})
+    assert b"Showing 0 of 3 techniques" in response.content
+    assert b"No techniques match your filters." in response.content
+
+
+def test_techniques_paginate(client, workspace):
+    project, revision, member = workspace
+    Technique.objects.bulk_create(
+        Technique(revision=revision, technique_id=f"AML.T9{i:03d}", name=f"Extra {i}")
+        for i in range(27)
+    )
+    client.force_login(member)
+    url = reverse("revision-overview", args=_args(project, revision))
+
+    page1 = client.get(url)
+    assert page1.content.count(b'class="tech-id"') == 25
+    assert b"Page 1 of 2" in page1.content
+    assert b"Next" in page1.content
+
+    page2 = client.get(url, {"page": "2"})
+    assert page2.content.count(b'class="tech-id"') == 5
+    assert b"Page 2 of 2" in page2.content
+    assert b"Previous" in page2.content
