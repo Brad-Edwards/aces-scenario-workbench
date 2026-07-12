@@ -22,10 +22,7 @@
       This permanently deletes your account and the comments and decisions you
       authored. This cannot be undone.
     </p>
-    <form method="post" action="{% url 'account-delete' %}">
-      {% csrf_token %}
-      <button type="submit">Delete my account</button>
-    </form>
+    <p><a class="button-danger" href="{% url 'account-delete' %}">Review deletion steps</a></p>
   </section>
 
   <p><a href="{% url 'privacy' %}">Privacy notice</a></p>

@@ -1,0 +1,11 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Server error — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <section class="panel readable">
+    <h1>Server error</h1>
+    <p>The workbench could not complete this request. Please try again or contact an administrator.</p>
+    <p><a class="button-secondary" href="{% url 'landing' %}">Back to home</a></p>
+  </section>
+{% endblock %}

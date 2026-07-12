@@ -46,7 +46,7 @@ Everything above, plus — decide and provision these up front:
 - **A shared cache** (for example Redis, via `ACES_WORKBENCH_CACHE_URL`) if you
   run more than one worker process, so login and request rate limits are counted
   across all workers.
-- Somewhere to keep the Django admin (`/admin/`) restricted to administrators.
+- Somewhere to keep the configured Django admin path restricted to administrators.
 
 !!! tip
     Set these as environment variables before the first public start, then run

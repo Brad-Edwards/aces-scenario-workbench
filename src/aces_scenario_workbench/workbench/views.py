@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q, QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET
@@ -92,6 +92,53 @@ def _filter_techniques(revision: Revision, filters: dict[str, str]) -> QuerySet[
     return techniques.distinct()
 
 
+def _dashboard_steps(revision: Revision) -> list[Step]:
+    steps = list(
+        revision.steps.prefetch_related(
+            "techniques",
+            "techniques__tactics",
+            "techniques__evidence",
+        )
+    )
+    for step in steps:
+        tactic_by_id = {}
+        evidence_by_id = {}
+        techniques = list(step.techniques.all())
+        for technique in techniques:
+            for tactic in technique.tactics.all():
+                tactic_by_id[tactic.tactic_id] = tactic
+            if technique.evidence:
+                evidence_by_id[technique.evidence.evidence_id] = technique.evidence
+        step.technique_count = len(techniques)
+        step.tactic_list = sorted(tactic_by_id.values(), key=lambda tactic: tactic.tactic_id)
+        step.evidence_list = sorted(
+            evidence_by_id.values(), key=lambda evidence: evidence.evidence_id
+        )
+    return steps
+
+
+def _dashboard_tactics(revision: Revision) -> list[Tactic]:
+    return list(
+        revision.tactics.annotate(technique_count=Count("techniques", distinct=True)).order_by(
+            "tactic_id"
+        )
+    )
+
+
+def _integrity_fields(revision: Revision) -> list[tuple[str, str]]:
+    metadata = revision.metadata if isinstance(revision.metadata, dict) else {}
+    experience = metadata.get("experience_contract")
+    if not isinstance(experience, dict):
+        experience = {}
+    fields = [
+        ("Catalog digest", experience.get("catalog_digest", "")),
+        ("Relationship digest", experience.get("relationship_digest", "")),
+        ("Assignment digest", experience.get("assignment_digest", "")),
+        ("Revision content digest", revision.content_digest),
+    ]
+    return [(label, str(value)) for label, value in fields if value]
+
+
 @login_required
 @require_GET
 def revision_overview(
@@ -102,12 +149,20 @@ def revision_overview(
     paginator = Paginator(_filter_techniques(revision, filters), TECHNIQUES_PER_PAGE)
     page = paginator.get_page(request.GET.get("page"))
     active_filters = {name: value for name, value in filters.items() if value}
+    steps = _dashboard_steps(revision)
+    tactics = _dashboard_tactics(revision)
+    max_tactic_count = max((tactic.technique_count for tactic in tactics), default=0) or 1
+    shortest_minutes = min(
+        (step.estimated_minutes for step in steps if step.estimated_minutes is not None),
+        default=None,
+    )
+    total_minutes = sum(step.estimated_minutes or 0 for step in steps)
     context = {
         "revision": revision,
         "scenario": revision.scenario,
         "project": revision.scenario.project,
-        "tactics": revision.tactics.all(),
-        "steps": revision.steps.all(),
+        "tactics": tactics,
+        "steps": steps,
         "techniques": page,
         "page": page,
         "filters": filters,
@@ -122,7 +177,12 @@ def revision_overview(
             "techniques": revision.techniques.count(),
             "steps": revision.steps.count(),
             "evidence": revision.evidence.count(),
+            "quick_starts": sum(1 for step in steps if step.tier == "quick"),
         },
+        "max_tactic_count": max_tactic_count,
+        "shortest_minutes": shortest_minutes,
+        "total_minutes": total_minutes,
+        "integrity_fields": _integrity_fields(revision),
     }
     return render(request, "workbench/revision_overview.html", context)
 

@@ -37,7 +37,8 @@ used and sessions reset on every restart.
 
 ## 3. Create projects and add people
 
-Sign in at `/accounts/login/` and open the Django admin at `/admin/`.
+Sign in at `/accounts/login/` and open the Django admin at `/control/` unless
+you changed `ACES_WORKBENCH_ADMIN_PATH`.
 
 - **Create a project**: Admin → Projects → Add.
 - **Add a member you can manage directly**: Admin → Users → Add (this sets a

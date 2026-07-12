@@ -7,6 +7,7 @@ from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
@@ -36,7 +37,7 @@ def test_csp_header_carries_script_nonce(client):
 
 
 def test_csp_excludes_admin(client):
-    response = client.get("/admin/login/")
+    response = client.get(f"/{settings_module.ADMIN_PATH}login/")
     assert response.status_code == 200
     assert "Content-Security-Policy" not in response.headers
 
@@ -117,15 +118,51 @@ def test_debug_relaxes_https_enforcement():
 
 
 @pytest.mark.django_db
+@override_settings(
+    DEBUG=False,
+    SECURE_SSL_REDIRECT=True,
+    SECURE_HSTS_SECONDS=31536000,
+    SESSION_COOKIE_SECURE=True,
+    CSRF_COOKIE_SECURE=True,
+    ADMIN_PATH="control/",
+)
 def test_doctor_reports_hardening_posture():
     out = StringIO()
     call_command("doctor", stdout=out)
     output = out.getvalue()
-    for label in (
-        "HTTPS redirect",
-        "HSTS",
-        "Secure cookies",
-        "Brute-force protection",
-        "Content-Security-Policy",
-    ):
-        assert label in output
+    assert "OK  HTTPS redirect: on" in output
+    assert "OK  HSTS: 31536000s" in output
+    assert "OK  Secure cookies: on" in output
+    assert "OK  Brute-force protection: django-axes" in output
+    assert "OK  Content-Security-Policy: on" in output
+    assert "OK  Admin path: /control/" in output
+
+
+@pytest.mark.django_db
+@override_settings(
+    DEBUG=False,
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+    CSRF_COOKIE_SECURE=True,
+    ADMIN_PATH="admin/",
+)
+def test_doctor_flags_insecure_hardening_posture():
+    out = StringIO()
+    call_command("doctor", stdout=out)
+    output = out.getvalue()
+    assert "!!  HTTPS redirect: off" in output
+    assert "!!  HSTS: off" in output
+    assert "!!  Secure cookies: off" in output
+    assert "!!  Admin path: /admin/" in output
+
+
+def test_admin_is_not_mounted_at_default_path(client):
+    assert client.get("/admin/login/").status_code == 404
+    assert client.get(f"/{settings_module.ADMIN_PATH}login/").status_code == 200
+
+
+def test_admin_path_rejects_invalid_values():
+    for value in ("", "../admin", "http://example.test/admin", "control?next=/", r"ops\\admin"):
+        with pytest.raises(ImproperlyConfigured):
+            settings_module._env_relative_path("ACES_WORKBENCH_TEST_ADMIN_PATH", value)
