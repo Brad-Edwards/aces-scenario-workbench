@@ -59,6 +59,12 @@ def test_import_maps_to_import_projection(monkeypatch):
     assert calls == [["aces-workbench", "import_projection", "proj.yaml", "--scenario", "demo"]]
 
 
+def test_sync_maps_to_sync_scenario(monkeypatch):
+    calls = _capture(monkeypatch)
+    cli.main(["aces-workbench", "sync", "scenario-pack", "--slug", "demo"])
+    assert calls == [["aces-workbench", "sync_scenario", "scenario-pack", "--slug", "demo"]]
+
+
 def test_serve_defaults_to_debug(monkeypatch):
     # serve is the development runner, so it enables debug mode (which keeps HTTPS
     # enforcement off) unless the environment already sets it.

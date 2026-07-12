@@ -91,6 +91,7 @@ aces-workbench serve [--host H] [--port P]   # run the app (applies migrations f
 aces-workbench migrate                        # apply database migrations
 aces-workbench createadmin                    # create an administrator account
 aces-workbench import <path> --scenario <slug> # import a pack's ATLAS projection
+aces-workbench sync <path> [--slug <slug>]    # create/update a scenario and import it
 aces-workbench doctor                         # report configuration readiness
 aces-workbench manage <command> [...]         # any Django management command
 ```
@@ -98,6 +99,16 @@ aces-workbench manage <command> [...]         # any Django management command
 Administrators create scenarios and invite members from the Django admin
 (`/control/` by default); import a scenario pack's ATLAS technique projection with
 `aces-workbench import <pack-path> --scenario <slug>`.
+
+For local dogfooding against an actively developed pack, use `sync`. It creates
+the scenario row when needed, updates explicit scenario metadata, imports the
+current projection as a digest-addressed immutable revision, and does not write
+back into the pack:
+
+```bash
+aces-workbench sync <pack-path> --slug <slug> --name "Display Name" \
+  --grant-user you@example.com --role administrator
+```
 
 ## Development
 

@@ -110,6 +110,61 @@ def test_management_command_bad_path(scenario):
         call_command("import_projection", str(SAMPLE.parent / "nope.yaml"), scenario="demo")
 
 
+@pytest.mark.django_db
+def test_sync_scenario_command_creates_scenario_and_revision():
+    call_command("sync_scenario", str(SAMPLE.parent), slug="demo", name="Demo Scenario")
+    scenario = Scenario.objects.get(slug="demo")
+    assert scenario.name == "Demo Scenario"
+    assert scenario.revisions.count() == 1
+
+    call_command("sync_scenario", str(SAMPLE.parent), slug="demo")
+    scenario.refresh_from_db()
+    assert scenario.name == "Demo Scenario"
+    assert scenario.revisions.count() == 1
+
+
+@pytest.mark.django_db
+def test_sync_scenario_command_infers_slug_from_directory():
+    call_command("sync_scenario", str(SAMPLE.parent))
+    scenario = Scenario.objects.get(slug="sample-scenario")
+    assert scenario.revisions.count() == 1
+
+
+@pytest.mark.django_db
+def test_sync_scenario_command_grants_user_access():
+    user = User.objects.create_user(email="author@example.com", password="review-pass-1")
+    call_command(
+        "sync_scenario",
+        str(SAMPLE.parent),
+        slug="demo",
+        grant_user=user.email,
+        role=Role.AUTHOR,
+    )
+    membership = Membership.objects.get(scenario__slug="demo", user=user)
+    assert membership.role == Role.AUTHOR
+
+    call_command(
+        "sync_scenario",
+        str(SAMPLE.parent),
+        slug="demo",
+        grant_user=user.email,
+        role=Role.ADMINISTRATOR,
+    )
+    membership.refresh_from_db()
+    assert membership.role == Role.ADMINISTRATOR
+
+
+@pytest.mark.django_db
+def test_sync_scenario_command_unknown_grant_user():
+    with pytest.raises(CommandError):
+        call_command(
+            "sync_scenario",
+            str(SAMPLE.parent),
+            slug="demo",
+            grant_user="missing@example.com",
+        )
+
+
 def _upload():
     return SimpleUploadedFile("projection.yaml", SAMPLE.read_bytes(), content_type="text/yaml")
 
