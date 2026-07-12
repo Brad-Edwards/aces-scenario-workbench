@@ -51,6 +51,23 @@ class Command(BaseCommand):
         csp_on = "csp.middleware.CSPMiddleware" in settings.MIDDLEWARE
         self._report("Content-Security-Policy", "on" if csp_on else "off", csp_on)
 
+    def _report_deployment_prereqs(self) -> None:
+        # In debug these local defaults are fine; a public instance must set its
+        # own hostname and trusted origins, so surface them up front.
+        dev = settings.DEBUG
+        local_defaults = {"localhost", "127.0.0.1", "[::1]", ""}
+        hosts_ok = dev or not set(settings.ALLOWED_HOSTS) <= local_defaults
+        hosts = ",".join(settings.ALLOWED_HOSTS) or "(none)"
+        if not hosts_ok:
+            hosts += " — set ACES_WORKBENCH_ALLOWED_HOSTS to your public hostname(s)"
+        self._report("Allowed hosts", hosts, hosts_ok)
+
+        origins_ok = dev or bool(settings.CSRF_TRUSTED_ORIGINS)
+        origins = f"{len(settings.CSRF_TRUSTED_ORIGINS)} configured"
+        if not origins_ok:
+            origins += " — set ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS to your public origin(s)"
+        self._report("CSRF trusted origins", origins, origins_ok)
+
     def handle(self, *args: Any, **options: Any) -> None:
         python_version = ".".join(str(part) for part in sys.version_info[:3])
         self._report("Python", python_version, sys.version_info >= (3, 12))
@@ -71,3 +88,4 @@ class Command(BaseCommand):
         self._report("Email", "SMTP" if smtp else "console (no delivery)", smtp)
         self._report("Debug", str(settings.DEBUG), not settings.DEBUG)
         self._report_hardening()
+        self._report_deployment_prereqs()

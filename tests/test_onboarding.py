@@ -12,7 +12,7 @@ from django.core import mail
 from django.core.management import call_command
 from django.db import DEFAULT_DB_ALIAS, connections
 from django.db.utils import OperationalError
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -160,6 +160,35 @@ def test_doctor_reports_readiness():
     output = out.getvalue()
     for label in ("Python", "Database", "Migrations", "Secret key", "Email", "Debug"):
         assert label in output
+
+
+@pytest.mark.django_db
+@override_settings(ALLOWED_HOSTS=["localhost", "127.0.0.1", "[::1]"], CSRF_TRUSTED_ORIGINS=[])
+def test_doctor_flags_missing_deployment_prereqs():
+    # Local defaults with debug off (the test runner injects "testserver", so the
+    # override restores the shipped default): doctor should prompt for the public
+    # hostname and CSRF origins.
+    out = StringIO()
+    call_command("doctor", stdout=out)
+    output = out.getvalue()
+    assert "Allowed hosts" in output
+    assert "CSRF trusted origins" in output
+    assert "ACES_WORKBENCH_ALLOWED_HOSTS" in output
+    assert "ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS" in output
+
+
+@pytest.mark.django_db
+def test_doctor_accepts_public_deployment_config():
+    with override_settings(
+        ALLOWED_HOSTS=["scenarios.example.com"],
+        CSRF_TRUSTED_ORIGINS=["https://scenarios.example.com"],
+    ):
+        out = StringIO()
+        call_command("doctor", stdout=out)
+        output = out.getvalue()
+    assert "scenarios.example.com" in output
+    assert "set ACES_WORKBENCH_ALLOWED_HOSTS" not in output
+    assert "set ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS" not in output
 
 
 def test_doctor_handles_database_failure(monkeypatch):
