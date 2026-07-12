@@ -26,7 +26,7 @@ jobs:
       - name: Build the docs site
         run: uv run --group docs mkdocs build --strict
       - name: Upload the site artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
