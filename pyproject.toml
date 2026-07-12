@@ -10,12 +10,26 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
 authors = [{ name = "Brad Edwards" }]
+keywords = ["aces", "scenario", "atlas", "review", "django"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
 dependencies = [
     "Django>=5.1,<6",
     "whitenoise>=6.7",
     "dj-database-url>=2.2",
     "PyYAML>=6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Brad-Edwards/aces-scenario-workbench"
+Repository = "https://github.com/Brad-Edwards/aces-scenario-workbench"
+Issues = "https://github.com/Brad-Edwards/aces-scenario-workbench/issues"
 
 [project.scripts]
 aces-workbench = "aces_scenario_workbench.cli:main"

@@ -37,6 +37,25 @@ after changing `.pre-commit-config.yaml`.
 It is normal for the formatters to make changes on the first run — stage them
 and commit.
 
+## Branching, releases, and versioning
+
+- Feature branches open PRs into `dev`; `dev` is promoted to `main` by a PR.
+- PR titles into `dev` follow Conventional Commits (`feat:`, `fix:`, `docs:`,
+  `chore:`, …) and are enforced by `tools/check_pr_title.py`. The squash-merge
+  title becomes the commit release-please reads.
+- **release-please owns versioning and `CHANGELOG.md`.** Do not hand-edit
+  `[project].version` in `pyproject.toml` or `CHANGELOG.md`. On merge to `main`,
+  release-please maintains a `chore(main): release X.Y.Z` PR; merging it tags the
+  release, publishes to PyPI (OIDC trusted publishing), and a back-merge PR
+  syncs `main → dev`.
+- Version mapping: `feat:` → minor, `fix:`/`perf:` → patch, `feat!:` or a
+  `BREAKING CHANGE:` footer → major (demoted to minor pre-1.0). `docs`, `chore`,
+  `refactor`, `test`, `ci`, `build` do not cut a release.
+
+Publishing requires a one-time owner setup: a PyPI project with a Trusted
+Publisher for this repo's `release-please.yml` and a GitHub Environment named
+`pypi`.
+
 ## Ground Control
 
 This repository is onboarded to Ground Control for requirements and workflow
