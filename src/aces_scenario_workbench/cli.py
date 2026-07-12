@@ -18,6 +18,11 @@ def _run(argv: list[str]) -> None:
 
 
 def _serve(args: list[str]) -> None:
+    # `serve` wraps Django's development server, so it runs in debug mode unless
+    # told otherwise. This keeps plain-HTTP localhost working (production runs
+    # under gunicorn with debug off, which turns on HTTPS enforcement). Hosting
+    # for real uses the container path in docs/deployment.md.
+    os.environ.setdefault("ACES_WORKBENCH_DEBUG", "true")
     host = os.environ.get("ACES_WORKBENCH_HOST", "127.0.0.1")
     port = os.environ.get("ACES_WORKBENCH_PORT", "8000")
     it = iter(args)

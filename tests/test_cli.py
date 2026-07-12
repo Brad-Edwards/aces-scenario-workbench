@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import aces_scenario_workbench.cli as cli
 
 
@@ -55,3 +57,22 @@ def test_import_maps_to_import_projection(monkeypatch):
     calls = _capture(monkeypatch)
     cli.main(["aces-workbench", "import", "proj.yaml", "--project", "demo"])
     assert calls == [["aces-workbench", "import_projection", "proj.yaml", "--project", "demo"]]
+
+
+def test_serve_defaults_to_debug(monkeypatch):
+    # serve is the development runner, so it enables debug mode (which keeps HTTPS
+    # enforcement off) unless the environment already sets it.
+    monkeypatch.setattr(cli, "_run", lambda argv: None)
+    monkeypatch.delenv("ACES_WORKBENCH_DEBUG", raising=False)
+    try:
+        cli.main(["aces-workbench", "serve"])
+        assert os.environ.get("ACES_WORKBENCH_DEBUG") == "true"
+    finally:
+        os.environ.pop("ACES_WORKBENCH_DEBUG", None)
+
+
+def test_serve_honours_explicit_debug(monkeypatch):
+    monkeypatch.setattr(cli, "_run", lambda argv: None)
+    monkeypatch.setenv("ACES_WORKBENCH_DEBUG", "false")
+    cli.main(["aces-workbench", "serve"])
+    assert os.environ["ACES_WORKBENCH_DEBUG"] == "false"

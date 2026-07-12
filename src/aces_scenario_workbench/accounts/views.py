@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django_ratelimit.decorators import ratelimit
 
 from .forms import AcceptInvitationForm
 from .models import Invitation
@@ -35,11 +36,14 @@ def _apply_invitation(
         user.set_password(form.cleaned_data["password1"])
         user.save()
         invitation.accept(user)
-        login(request, user)
+        # Multiple auth backends are configured (django-axes sits in front of the
+        # model backend), so the backend must be named for a manual login.
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         return redirect("dashboard")
     return None
 
 
+@ratelimit(key="ip", rate="10/h", method="POST", block=True)
 @require_http_methods(["GET", "POST"])
 def invite_accept(request: HttpRequest, token: str) -> HttpResponse:
     """Accept a project invitation, registering a new account when needed."""

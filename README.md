@@ -58,9 +58,22 @@ All configuration is environment-driven:
 | `ACES_WORKBENCH_DEBUG` | `false` | Enable Django debug mode |
 | `ACES_WORKBENCH_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | Comma-separated allowed hosts |
 | `ACES_WORKBENCH_EMAIL_HOST` | _(unset → console)_ | SMTP host; enables email delivery for invitations and password resets |
+| `ACES_WORKBENCH_CACHE_URL` | in-memory | Cache used by the request rate limiter; set a shared cache (e.g. `redis://…`) behind multiple workers |
 
 Email uses a console backend by default (messages print to the server console);
 see [`docs/setup.md`](docs/setup.md) for the full email variable list.
+
+## Security
+
+The workbench is built to run on the public internet. Outside debug mode it
+enforces HTTPS (redirect, HSTS, secure cookies), sends a Content-Security-Policy
+that allows no inline scripts beyond a per-request nonce, sets clickjacking and
+MIME-sniffing protections, locks out repeated failed logins (django-axes), and
+rate-limits password-reset and invitation requests. `aces-workbench doctor`
+reports the live posture. `aces-workbench serve` is the development server and
+runs in debug mode; host with the container path in
+[`docs/deployment.md`](docs/deployment.md). Keep the Django admin
+(`/admin/`) restricted to administrators.
 
 ## CLI
 

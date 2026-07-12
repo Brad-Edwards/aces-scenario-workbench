@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 
 import dj_database_url
+import django_cache_url
+from csp.constants import NONCE, SELF
 from django.core.management.utils import get_random_secret_key
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -18,6 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 def _env_bool(name: str, default: bool = False) -> bool:
     return os.environ.get(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    return int(os.environ.get(name, str(default)))
 
 
 def _env_list(name: str, default: str) -> list[str]:
@@ -44,6 +50,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "axes",
     "aces_scenario_workbench.accounts",
     "aces_scenario_workbench.workbench",
 ]
@@ -57,6 +64,10 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "csp.middleware.CSPMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
+    # AxesMiddleware must be last so it can convert lockouts into responses.
+    "axes.middleware.AxesMiddleware",
 ]
 
 ROOT_URLCONF = "aces_scenario_workbench.urls"
@@ -87,7 +98,24 @@ DATABASES = {
     ),
 }
 
+# Cache backend, used by the request rate limiter. The in-memory default needs no
+# setup and is correct for a single worker; point ACES_WORKBENCH_CACHE_URL at a
+# shared cache (e.g. redis://…) so limits hold across multiple worker processes.
+CACHES = {
+    "default": django_cache_url.config(
+        env="ACES_WORKBENCH_CACHE_URL", default="locmem://aces-workbench"
+    )
+}
+
 AUTH_USER_MODEL = "accounts.User"
+
+# django-axes brute-force protection sits in front of the model backend. Its
+# database handler records attempts in the database, so lockouts are consistent
+# across worker processes without a shared cache.
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -136,6 +164,44 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = _env_bool("ACES_WORKBENCH_SECURE_COOKIES", not DEBUG)
 CSRF_COOKIE_SECURE = _env_bool("ACES_WORKBENCH_SECURE_COOKIES", not DEBUG)
-SECURE_SSL_REDIRECT = _env_bool("ACES_WORKBENCH_SSL_REDIRECT", False)
-SECURE_HSTS_SECONDS = int(os.environ.get("ACES_WORKBENCH_HSTS_SECONDS", "0"))
+# HTTPS enforcement is on by default outside DEBUG. The proxy header lets the app
+# recognise TLS terminated upstream, so the redirect does not loop behind a
+# correctly configured reverse proxy. Each value stays overridable per deployment.
+SECURE_SSL_REDIRECT = _env_bool("ACES_WORKBENCH_SSL_REDIRECT", not DEBUG)
+SECURE_HSTS_SECONDS = _env_int("ACES_WORKBENCH_HSTS_SECONDS", 0 if DEBUG else 31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("ACES_WORKBENCH_HSTS_INCLUDE_SUBDOMAINS", True)
+SECURE_HSTS_PRELOAD = _env_bool("ACES_WORKBENCH_HSTS_PRELOAD", False)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Brute-force protection for authentication (django-axes). Failures are counted
+# per client IP address, so repeated password attempts from one source are locked
+# out after the limit for the cool-off window, and the counter clears on success.
+AXES_FAILURE_LIMIT = _env_int("ACES_WORKBENCH_AXES_FAILURE_LIMIT", 5)
+AXES_COOLOFF_TIME = _env_int("ACES_WORKBENCH_AXES_COOLOFF_HOURS", 1)
+AXES_LOCKOUT_PARAMETERS = ["ip_address"]
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = "429.html"
+
+# Rate limiting (django-ratelimit) for unauthenticated abuse-prone endpoints.
+# Exceeding a limit raises Ratelimited, which RatelimitMiddleware renders here.
+RATELIMIT_VIEW = "aces_scenario_workbench.workbench.views.ratelimited"
+
+# Content Security Policy. Scripts are restricted to same-origin plus a per-request
+# nonce (the one inline script carries {{ request.csp_nonce }}); there is no
+# unsafe-inline. The Django admin ships inline scripts it does not nonce, so it is
+# excluded from the policy — keep the admin access-restricted in any deployment.
+CONTENT_SECURITY_POLICY = {
+    "EXCLUDE_URL_PREFIXES": ("/admin/",),
+    "DIRECTIVES": {
+        "default-src": [SELF],
+        "script-src": [SELF, NONCE],
+        "style-src": [SELF],
+        "img-src": [SELF, "data:"],
+        "font-src": [SELF],
+        "connect-src": [SELF],
+        "form-action": [SELF],
+        "frame-ancestors": ["'none'"],
+        "base-uri": [SELF],
+        "object-src": ["'none'"],
+    },
+}

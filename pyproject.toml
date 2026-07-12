@@ -23,6 +23,10 @@ dependencies = [
     "Django>=5.1,<6",
     "whitenoise>=6.7",
     "dj-database-url>=2.2",
+    "django-cache-url>=3.4",
+    "django-axes>=7.0",
+    "django-ratelimit>=4.1",
+    "django-csp>=4.0",
     "PyYAML>=6",
 ]
 

@@ -35,10 +35,23 @@ Set these in the container/host environment for a hosted deployment:
 | `DATABASE_URL` | `postgres://…` connection string |
 | `ACES_WORKBENCH_SECRET_KEY` | stable secret key (required) |
 | `ACES_WORKBENCH_ALLOWED_HOSTS` | comma-separated hostnames |
-| `ACES_WORKBENCH_SECURE_COOKIES` | `1` behind HTTPS (default follows debug) |
-| `ACES_WORKBENCH_SSL_REDIRECT` | `1` to redirect HTTP→HTTPS at the app |
-| `ACES_WORKBENCH_HSTS_SECONDS` | HSTS max-age when terminating TLS at the app |
 | `ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS` | comma-separated origins for the public URL |
+| `ACES_WORKBENCH_CACHE_URL` | shared cache for rate limiting behind multiple workers, e.g. `redis://host:6379/0` |
+| `ACES_WORKBENCH_SECURE_COOKIES` | secure session/CSRF cookies (default on when debug is off) |
+| `ACES_WORKBENCH_SSL_REDIRECT` | redirect HTTP→HTTPS at the app (default on when debug is off) |
+| `ACES_WORKBENCH_HSTS_SECONDS` | HSTS max-age (default `31536000` when debug is off) |
+| `ACES_WORKBENCH_HSTS_INCLUDE_SUBDOMAINS` | apply HSTS to subdomains (default `1`) |
+| `ACES_WORKBENCH_HSTS_PRELOAD` | set the HSTS preload flag (default `0`) |
+| `ACES_WORKBENCH_AXES_FAILURE_LIMIT` | failed logins per IP before lockout (default `5`) |
+| `ACES_WORKBENCH_AXES_COOLOFF_HOURS` | lockout duration in hours (default `1`) |
+
+The HTTPS controls are on by default outside debug mode; the app trusts the
+`X-Forwarded-Proto` header so the redirect does not loop behind a TLS-terminating
+proxy. A Content-Security-Policy with a per-request script nonce (no inline
+scripts) is applied to every response except the Django admin, which ships inline
+scripts it does not nonce — keep `/admin/` restricted to administrators. The
+in-memory rate-limit cache is per worker; set `ACES_WORKBENCH_CACHE_URL` to a
+shared cache so limits hold across processes.
 
 ## AWS (ca-central-1)
 

@@ -28,6 +28,11 @@ def privacy(request: HttpRequest) -> HttpResponse:
     return render(request, "workbench/privacy.html")
 
 
+def ratelimited(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
+    """Response for a request that exceeded a rate limit (RATELIMIT_VIEW target)."""
+    return render(request, "429.html", status=429)
+
+
 @login_required
 @require_GET
 def dashboard(request: HttpRequest) -> HttpResponse:
