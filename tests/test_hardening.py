@@ -14,7 +14,7 @@ from django.urls import reverse
 
 import aces_scenario_workbench.settings as settings_module
 from aces_scenario_workbench.accounts.models import Invitation
-from aces_scenario_workbench.workbench.models import Project
+from aces_scenario_workbench.workbench.models import Scenario
 
 User = get_user_model()
 PASSWORD = "review-pass-42x"
@@ -58,8 +58,8 @@ def test_password_reset_is_rate_limited(client):
 
 @pytest.mark.django_db
 def test_invite_accept_is_rate_limited(client):
-    project = Project.objects.create(slug="demo", name="Demo Project")
-    invitation = Invitation.objects.create(email="new@example.com", project=project)
+    scenario = Scenario.objects.create(slug="demo", name="Demo Scenario")
+    invitation = Invitation.objects.create(email="new@example.com", scenario=scenario)
     url = reverse("invite-accept", args=[invitation.token])
     # A mismatched password keeps the invitation pending, so every POST counts.
     bad = {"display_name": "", "password1": PASSWORD, "password2": "different-pass-9"}

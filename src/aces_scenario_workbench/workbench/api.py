@@ -10,15 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import authz
 from .ingest import ProjectionError, import_projection, parse_projection
-from .models import (
-    Evidence,
-    ObjectType,
-    Project,
-    Revision,
-    Role,
-    Step,
-    Technique,
-)
+from .models import Evidence, ObjectType, Revision, Role, Scenario, Step, Technique
 
 _ALLOWED_ROLES = {Role.AUTHOR, Role.ADMINISTRATOR}
 
@@ -43,15 +35,15 @@ def _read_projection(request: HttpRequest) -> dict[str, Any]:
 @login_required
 @require_POST
 def upload_revision(request: HttpRequest, slug: str) -> HttpResponse:
-    """Ingest a projection uploaded for a project (author/administrator only)."""
-    project = get_object_or_404(Project, slug=slug)
-    if authz.user_role(request.user, project) not in _ALLOWED_ROLES:
+    """Ingest a projection uploaded for a scenario (author/administrator only)."""
+    scenario = get_object_or_404(Scenario, slug=slug)
+    if authz.user_role(request.user, scenario) not in _ALLOWED_ROLES:
         return JsonResponse({"detail": "You do not have permission to upload."}, status=403)
     try:
         data = _read_projection(request)
     except UploadError as exc:
         return JsonResponse({"detail": exc.detail}, status=exc.status)
-    revision, created = import_projection(project, data)
+    revision, created = import_projection(scenario, data)
     return JsonResponse(
         {"revision": revision.pk, "created": created, "mapping_id": revision.mapping_id},
         status=201 if created else 200,
@@ -72,49 +64,39 @@ def current_user(request: HttpRequest) -> JsonResponse:
 
 @login_required
 @require_GET
-def project_list(request: HttpRequest) -> JsonResponse:
-    projects = (
-        Project.objects.filter(memberships__user=request.user)
-        .annotate(
-            scenario_count=Count("scenarios", distinct=True),
-            revision_count=Count("scenarios__revisions", distinct=True),
-        )
+def scenario_list(request: HttpRequest) -> JsonResponse:
+    scenarios = (
+        Scenario.objects.filter(memberships__user=request.user)
+        .annotate(revision_count=Count("revisions", distinct=True))
         .prefetch_related("memberships")
     )
-    return JsonResponse({"projects": [_project_row(project, request.user) for project in projects]})
+    return JsonResponse(
+        {"scenarios": [_scenario_row(scenario, request.user) for scenario in scenarios]}
+    )
 
 
 @login_required
 @require_GET
-def project_detail(request: HttpRequest, slug: str) -> JsonResponse:
-    project = get_object_or_404(
-        Project.objects.annotate(
-            scenario_count=Count("scenarios", distinct=True),
-            revision_count=Count("scenarios__revisions", distinct=True),
+def scenario_detail(request: HttpRequest, slug: str) -> JsonResponse:
+    scenario = get_object_or_404(
+        Scenario.objects.annotate(
+            revision_count=Count("revisions", distinct=True)
         ).prefetch_related(
             "memberships",
-            "scenarios__revisions",
-            "scenarios__revisions__steps",
-            "scenarios__revisions__techniques",
-            "scenarios__revisions__evidence",
-            "scenarios__revisions__comments",
-            "scenarios__revisions__decisions",
+            "revisions",
+            "revisions__steps",
+            "revisions__techniques",
+            "revisions__evidence",
+            "revisions__comments",
+            "revisions__decisions",
         ),
         slug=slug,
         memberships__user=request.user,
     )
     return JsonResponse(
         {
-            "project": _project_row(project, request.user),
-            "scenarios": [
-                {
-                    "slug": scenario.slug,
-                    "name": scenario.name,
-                    "description": scenario.description,
-                    "revisions": [_revision_row(revision) for revision in scenario.revisions.all()],
-                }
-                for scenario in project.scenarios.all()
-            ],
+            "scenario": _scenario_row(scenario, request.user),
+            "revisions": [_revision_row(revision) for revision in scenario.revisions.all()],
         }
     )
 
@@ -123,7 +105,7 @@ def project_detail(request: HttpRequest, slug: str) -> JsonResponse:
 @require_GET
 def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
     revision = get_object_or_404(
-        Revision.objects.select_related("scenario", "scenario__project").prefetch_related(
+        Revision.objects.select_related("scenario").prefetch_related(
             "steps",
             "steps__techniques",
             "steps__techniques__evidence",
@@ -138,7 +120,7 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
             "decisions__author",
         ),
         pk=revision_pk,
-        scenario__project__memberships__user=request.user,
+        scenario__memberships__user=request.user,
     )
     comment_counts = _anchor_counts(revision.comments.all())
     decision_counts = _anchor_counts(revision.decisions.all())
@@ -146,10 +128,6 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
         {
             "id": revision.pk,
             "label": revision.label,
-            "project": {
-                "slug": revision.scenario.project.slug,
-                "name": revision.scenario.project.name,
-            },
             "scenario": {
                 "slug": revision.scenario.slug,
                 "name": revision.scenario.name,
@@ -197,19 +175,18 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
     )
 
 
-def _project_row(project: Project, user: object) -> dict[str, object]:
+def _scenario_row(scenario: Scenario, user: object) -> dict[str, object]:
     membership = next(
-        (membership for membership in project.memberships.all() if membership.user_id == user.pk),
+        (membership for membership in scenario.memberships.all() if membership.user_id == user.pk),
         None,
     )
     return {
-        "slug": project.slug,
-        "name": project.name,
-        "description": project.description,
+        "slug": scenario.slug,
+        "name": scenario.name,
+        "description": scenario.description,
         "role": membership.get_role_display() if membership else "",
-        "scenarioCount": getattr(project, "scenario_count", project.scenarios.count()),
-        "revisionCount": getattr(project, "revision_count", 0),
-        "updatedAt": project.updated_at.isoformat(),
+        "revisionCount": getattr(scenario, "revision_count", 0),
+        "updatedAt": scenario.updated_at.isoformat(),
     }
 
 

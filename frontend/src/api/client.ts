@@ -4,42 +4,35 @@ export type Principal = {
   isStaff: boolean;
 };
 
-export type ProjectRow = {
+export type ScenarioRow = {
   slug: string;
   name: string;
   description: string;
   role: string;
-  scenarioCount: number;
   revisionCount: number;
   updatedAt: string;
 };
 
-export type ProjectDetail = {
-  project: ProjectRow;
-  scenarios: Array<{
-    slug: string;
-    name: string;
-    description: string;
-    revisions: Array<{
-      id: number;
-      label: string;
-      packVersion: string;
-      framework: string;
-      createdAt: string;
-      updatedAt: string;
-      moduleCount: number;
-      techniqueCount: number;
-      evidenceCount: number;
-      commentCount: number;
-      decisionCount: number;
-    }>;
+export type ScenarioDetail = {
+  scenario: ScenarioRow;
+  revisions: Array<{
+    id: number;
+    label: string;
+    packVersion: string;
+    framework: string;
+    createdAt: string;
+    updatedAt: string;
+    moduleCount: number;
+    techniqueCount: number;
+    evidenceCount: number;
+    commentCount: number;
+    decisionCount: number;
   }>;
 };
 
 export type RevisionWorkspace = {
   id: number;
   label: string;
-  project: { slug: string; name: string };
   scenario: { slug: string; name: string; description: string };
   framework: string;
   createdAt: string;
@@ -107,12 +100,12 @@ export function getPrincipal() {
   return getJson<Principal>("/api/app/me");
 }
 
-export function getProjects() {
-  return getJson<{ projects: ProjectRow[] }>("/api/app/projects");
+export function getScenarios() {
+  return getJson<{ scenarios: ScenarioRow[] }>("/api/app/scenarios");
 }
 
-export function getProject(slug: string) {
-  return getJson<ProjectDetail>(`/api/app/projects/${encodeURIComponent(slug)}`);
+export function getScenario(slug: string) {
+  return getJson<ScenarioDetail>(`/api/app/scenarios/${encodeURIComponent(slug)}`);
 }
 
 export function getRevision(id: string) {

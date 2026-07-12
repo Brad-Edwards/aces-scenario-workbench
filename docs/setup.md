@@ -35,16 +35,16 @@ debug status so you can see what still needs configuration.
 Set `ACES_WORKBENCH_SECRET_KEY` to a stable value; without it a random key is
 used and sessions reset on every restart.
 
-## 3. Create projects and add people
+## 3. Create scenarios and add people
 
 Sign in at `/accounts/login/` and open the Django admin at `/control/` unless
 you changed `ACES_WORKBENCH_ADMIN_PATH`.
 
-- **Create a project**: Admin → Projects → Add.
+- **Create a scenario**: Admin → Scenarios → Add.
 - **Add a member you can manage directly**: Admin → Users → Add (this sets a
-  real password), then add a Membership on the project with a role
+  real password), then add a Membership on the scenario with a role
   (`author`, `reviewer`, `stakeholder`, `administrator`).
-- **Invite by email**: Admin → Invitations → Add (email, project, role). An
+- **Invite by email**: Admin → Invitations → Add (email, scenario, role). An
   invitation email with an accept link is sent on save; the invitee sets their
   own password. Use the "Resend invitation email" action to send it again.
 
@@ -55,7 +55,7 @@ from there for local use. Configure SMTP (below) to deliver for real.
 ## 4. Import a scenario
 
 ```bash
-aces-workbench import /path/to/pack --project <project-slug>
+aces-workbench import /path/to/pack --scenario <scenario-slug>
 ```
 
 Point it at a pack directory containing an ATLAS technique projection, or at the

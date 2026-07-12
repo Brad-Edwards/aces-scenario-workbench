@@ -56,26 +56,26 @@ def ratelimited(request: HttpRequest, _: Exception | None = None) -> HttpRespons
 @login_required
 @require_GET
 def dashboard(request: HttpRequest) -> HttpResponse:
-    """List the projects the signed-in user is a member of."""
-    return render(request, "workbench/dashboard.html", {"projects": request.user.projects.all()})
+    """List the scenarios the signed-in user is a member of."""
+    return render(request, "workbench/dashboard.html", {"scenarios": request.user.scenarios.all()})
 
 
 @login_required
 @require_GET
-def project_detail(request: HttpRequest, slug: str) -> HttpResponse:
-    project = access.member_project(request, slug)
-    scenarios = project.scenarios.prefetch_related("revisions")
+def scenario_detail(request: HttpRequest, slug: str) -> HttpResponse:
+    scenario = access.member_scenario(request, slug)
+    revisions = scenario.revisions.all()
     return render(
-        request, "workbench/project_detail.html", {"project": project, "scenarios": scenarios}
+        request, "workbench/scenario_detail.html", {"scenario": scenario, "revisions": revisions}
     )
 
 
 @login_required
 @require_GET
-def project_activity(request: HttpRequest, slug: str) -> HttpResponse:
-    project = access.member_project(request, slug)
-    events = project.activity.select_related("actor")[:100]
-    return render(request, "workbench/activity.html", {"project": project, "events": events})
+def scenario_activity(request: HttpRequest, slug: str) -> HttpResponse:
+    scenario = access.member_scenario(request, slug)
+    events = scenario.activity.select_related("actor")[:100]
+    return render(request, "workbench/activity.html", {"scenario": scenario, "events": events})
 
 
 def _filter_techniques(revision: Revision, filters: dict[str, str]) -> QuerySet[Technique]:
@@ -134,26 +134,10 @@ def _dashboard_tactics(revision: Revision) -> list[Tactic]:
     )
 
 
-def _integrity_fields(revision: Revision) -> list[tuple[str, str]]:
-    metadata = revision.metadata if isinstance(revision.metadata, dict) else {}
-    experience = metadata.get("experience_contract")
-    if not isinstance(experience, dict):
-        experience = {}
-    fields = [
-        ("Catalog digest", experience.get("catalog_digest", "")),
-        ("Relationship digest", experience.get("relationship_digest", "")),
-        ("Assignment digest", experience.get("assignment_digest", "")),
-        ("Revision content digest", revision.content_digest),
-    ]
-    return [(label, str(value)) for label, value in fields if value]
-
-
 @login_required
 @require_GET
-def revision_overview(
-    request: HttpRequest, project_slug: str, scenario_slug: str, revision_pk: int
-) -> HttpResponse:
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
+def revision_overview(request: HttpRequest, scenario_slug: str, revision_pk: int) -> HttpResponse:
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
     filters = {name: request.GET.get(name, "").strip() for name in _TECHNIQUE_FILTERS}
     paginator = Paginator(_filter_techniques(revision, filters), TECHNIQUES_PER_PAGE)
     page = paginator.get_page(request.GET.get("page"))
@@ -169,7 +153,6 @@ def revision_overview(
     context = {
         "revision": revision,
         "scenario": revision.scenario,
-        "project": revision.scenario.project,
         "tactics": tactics,
         "steps": steps,
         "techniques": page,
@@ -191,7 +174,6 @@ def revision_overview(
         "max_tactic_count": max_tactic_count,
         "shortest_minutes": shortest_minutes,
         "total_minutes": total_minutes,
-        "integrity_fields": _integrity_fields(revision),
     }
     return render(request, "workbench/revision_overview.html", context)
 
@@ -207,7 +189,6 @@ def _object_context(
     context = {
         "revision": revision,
         "scenario": revision.scenario,
-        "project": revision.scenario.project,
         "object_label": label,
         "object": obj,
         "object_type": object_type,
@@ -221,12 +202,11 @@ def _object_context(
 @require_GET
 def technique_detail(
     request: HttpRequest,
-    project_slug: str,
     scenario_slug: str,
     revision_pk: int,
     technique_id: str,
 ) -> HttpResponse:
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
     technique = get_object_or_404(Technique, revision=revision, technique_id=technique_id)
     context = _object_context(
         request, revision, technique, "Technique", ObjectType.TECHNIQUE, technique.technique_id
@@ -237,9 +217,9 @@ def technique_detail(
 @login_required
 @require_GET
 def tactic_detail(
-    request: HttpRequest, project_slug: str, scenario_slug: str, revision_pk: int, tactic_id: str
+    request: HttpRequest, scenario_slug: str, revision_pk: int, tactic_id: str
 ) -> HttpResponse:
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
     tactic = get_object_or_404(Tactic, revision=revision, tactic_id=tactic_id)
     context = _object_context(
         request, revision, tactic, "Tactic", ObjectType.TACTIC, tactic.tactic_id
@@ -250,9 +230,9 @@ def tactic_detail(
 @login_required
 @require_GET
 def step_detail(
-    request: HttpRequest, project_slug: str, scenario_slug: str, revision_pk: int, path_step: str
+    request: HttpRequest, scenario_slug: str, revision_pk: int, path_step: str
 ) -> HttpResponse:
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
     step = get_object_or_404(Step, revision=revision, path_step=path_step)
     context = _object_context(request, revision, step, "Module", ObjectType.STEP, step.path_step)
     return render(request, "workbench/step_detail.html", context)
@@ -261,9 +241,9 @@ def step_detail(
 @login_required
 @require_GET
 def evidence_detail(
-    request: HttpRequest, project_slug: str, scenario_slug: str, revision_pk: int, evidence_id: str
+    request: HttpRequest, scenario_slug: str, revision_pk: int, evidence_id: str
 ) -> HttpResponse:
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
     evidence = get_object_or_404(Evidence, revision=revision, evidence_id=evidence_id)
     context = _object_context(
         request, revision, evidence, "Evidence", ObjectType.EVIDENCE, evidence.evidence_id

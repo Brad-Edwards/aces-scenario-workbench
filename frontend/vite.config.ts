@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  base: "/static/workbench/spa/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

@@ -16,9 +16,8 @@ from typing import Any
 
 import yaml
 from django.db import transaction
-from django.utils.text import slugify
 
-from .models import Evidence, Project, Revision, Scenario, Step, Tactic, Technique
+from .models import Evidence, Revision, Scenario, Step, Tactic, Technique
 
 PROJECTION_CANDIDATES = (
     "atlas-technique-projection.yaml",
@@ -80,14 +79,9 @@ def _digest(data: dict[str, Any]) -> str:
 
 
 @transaction.atomic
-def import_projection(project: Project, data: dict[str, Any]) -> tuple[Revision, bool]:
-    """Import a projection into ``project``; returns ``(revision, created)``."""
-    pack = _text(data, "pack", "scenario")
+def import_projection(scenario: Scenario, data: dict[str, Any]) -> tuple[Revision, bool]:
+    """Import a projection into ``scenario``; returns ``(revision, created)``."""
     framework = _mapping(data, "framework")
-
-    scenario, _ = Scenario.objects.get_or_create(
-        project=project, slug=slugify(pack) or "scenario", defaults={"name": pack}
-    )
 
     digest = _digest(data)
     existing = Revision.objects.filter(scenario=scenario, content_digest=digest).first()

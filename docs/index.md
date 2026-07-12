@@ -17,7 +17,7 @@ writes changes back into a pack.
   hosting. Check this first so nothing blocks you halfway through.
 - **[Setup](setup.md)** — install to a working, multi-user workspace.
 - **[Access & registration](access-control.md)** — the invite-only account model
-  and project roles.
+  and scenario roles.
 - **[Deployment](deployment.md)** — container, configuration, and hosting.
 - **[Go-live checklist](go-live-checklist.md)** — the final checks before you
   expose an instance to the internet.

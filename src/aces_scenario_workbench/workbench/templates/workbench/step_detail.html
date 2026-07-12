@@ -4,9 +4,9 @@
 
 {% block content %}
   <p class="breadcrumb">
-    <a href="{% url 'dashboard' %}">Projects</a> /
-    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
-    <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
+    <a href="{% url 'dashboard' %}">Scenarios</a> /
+    <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
+    <a href="{% url 'revision-overview' scenario.slug revision.pk %}">{{ revision.label }}</a> /
     Module
   </p>
   <h1>Module {{ object.path_step }}</h1>
@@ -31,7 +31,7 @@
     <ul class="card-list">
       {% for technique in object.techniques.all %}
         <li>
-          <a href="{% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
+          <a href="{% url 'technique-detail' scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
         </li>
       {% empty %}
         <li class="empty">No techniques mapped to this module.</li>

@@ -25,9 +25,8 @@
 
 {% block content %}
   <p class="breadcrumb">
-    <a href="{% url 'dashboard' %}">Projects</a> /
-    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
-    {{ scenario.name }} /
+    <a href="{% url 'dashboard' %}">Scenarios</a> /
+    <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
     {{ revision.label }}
   </p>
 
@@ -52,7 +51,7 @@
         <h2>Technique relationships by tactic</h2>
         <div class="bars">
           {% for tactic in tactics %}
-            {% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id as tactic_url %}
+            {% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id as tactic_url %}
             <a class="bar-row" href="{{ tactic_url }}" title="{{ tactic.tactic_id }}">
               <span class="bar-label">{{ tactic.name }}</span>
               <progress class="bar-track" value="{{ tactic.technique_count }}" max="{{ max_tactic_count }}" aria-label="{{ tactic.name }} technique count"></progress>
@@ -68,7 +67,7 @@
         <h2>Challenge progression</h2>
         <div class="progression">
           {% for step in steps %}
-            {% url 'step-detail' project.slug scenario.slug revision.pk step.path_step as step_url %}
+            {% url 'step-detail' scenario.slug revision.pk step.path_step as step_url %}
             <a class="progress-step" data-tier="{{ step.tier }}" href="{{ step_url }}">
               <b>{{ step.path_step }}. {{ step.surface|default:"Module" }}</b>
               <span>
@@ -80,13 +79,6 @@
             <p class="empty">No modules in this revision.</p>
           {% endfor %}
         </div>
-        {% if integrity_fields %}
-          <div class="integrity" aria-label="Integrity digests">
-            {% for label, value in integrity_fields %}
-              <div class="integrity-row"><span>{{ label }}</span><code>{{ value }}</code></div>
-            {% endfor %}
-          </div>
-        {% endif %}
       </section>
     </div>
   </section>
@@ -132,7 +124,7 @@
       <div class="field actions">
         <button type="submit">Filter</button>
         {% if has_filters %}
-          <a class="clear" href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}#techniques" title="Clear filters" aria-label="Clear filters">&times;</a>
+          <a class="clear" href="{% url 'revision-overview' scenario.slug revision.pk %}#techniques" title="Clear filters" aria-label="Clear filters">&times;</a>
         {% endif %}
       </div>
     </form>
@@ -155,7 +147,7 @@
         </thead>
         <tbody>
           {% for technique in techniques %}
-            {% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id as technique_url %}
+            {% url 'technique-detail' scenario.slug revision.pk technique.technique_id as technique_url %}
             <tr class="clickable-row" data-href="{{ technique_url }}">
               <td class="tech-id">
                 <a href="{{ technique_url }}">{{ technique.technique_id }}</a>
@@ -163,19 +155,19 @@
               <td><strong>{{ technique.name }}</strong></td>
               <td>
                 {% for tactic in technique.tactics.all %}
-                  <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
+                  <a class="tag" href="{% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
                 {% endfor %}
               </td>
               <td>
                 {% if technique.step %}
-                  <a class="tier" data-tier="{{ technique.step.tier }}" href="{% url 'step-detail' project.slug scenario.slug revision.pk technique.step.path_step %}">
+                  <a class="tier" data-tier="{{ technique.step.tier }}" href="{% url 'step-detail' scenario.slug revision.pk technique.step.path_step %}">
                     {{ technique.step.path_step }}. {{ technique.step.surface|default:technique.step.path_step }}
                   </a>
                 {% endif %}
               </td>
               <td class="evidence">
                 {% if technique.evidence %}
-                  <a href="{% url 'evidence-detail' project.slug scenario.slug revision.pk technique.evidence.evidence_id %}">{{ technique.evidence.evidence_id }}</a>
+                  <a href="{% url 'evidence-detail' scenario.slug revision.pk technique.evidence.evidence_id %}">{{ technique.evidence.evidence_id }}</a>
                 {% endif %}
               </td>
               <td class="planned">
@@ -209,7 +201,7 @@
     </p>
     <div class="module-grid">
       {% for step in steps %}
-        {% url 'step-detail' project.slug scenario.slug revision.pk step.path_step as step_url %}
+        {% url 'step-detail' scenario.slug revision.pk step.path_step as step_url %}
         <article class="module clickable-card" data-tier="{{ step.tier }}" data-href="{{ step_url }}">
           <div class="module-head">
             <div>
@@ -226,13 +218,13 @@
             <dt>Evidence</dt>
             <dd>
               {% for evidence in step.evidence_list %}
-                <a class="evidence-chip" href="{% url 'evidence-detail' project.slug scenario.slug revision.pk evidence.evidence_id %}">{{ evidence.evidence_id }}</a>
+                <a class="evidence-chip" href="{% url 'evidence-detail' scenario.slug revision.pk evidence.evidence_id %}">{{ evidence.evidence_id }}</a>
               {% empty %}—{% endfor %}
             </dd>
             <dt>Tactics</dt>
             <dd>
               {% for tactic in step.tactic_list %}
-                <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
+                <a class="tag" href="{% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
               {% empty %}—{% endfor %}
             </dd>
           </dl>

@@ -74,12 +74,12 @@ Hiding navigation controls in the browser is not authorization. Access events an
 review-state changes should be auditable.
 
 The initial roles are `author`, `reviewer`, `stakeholder`, and `administrator`.
-Authorization must be enforceable per scenario or project, not only per deployment.
+Authorization must be enforceable per scenario, not only per deployment.
 
 ## Initial Implementation Slices
 
 1. Define and validate a versioned review-bundle schema from a sample ATLAS projection.
-2. Select the application stack and establish authenticated users and projects.
+2. Select the application stack and establish authenticated users and scenarios.
 3. Ingest immutable scenario revisions and render the prototype overview.
 4. Add stable detail routes for every object and relationship type.
 5. Add anchored comments, review states, and an auditable activity stream.

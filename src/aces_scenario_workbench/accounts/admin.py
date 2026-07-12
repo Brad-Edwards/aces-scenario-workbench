@@ -40,9 +40,9 @@ class UserAdmin(DjangoUserAdmin):
 
 @admin.register(Invitation)
 class InvitationAdmin(admin.ModelAdmin):
-    list_display = ("email", "project", "role", "invited_by", "created_at", "accepted_at")
-    list_filter = ("role", "project")
-    search_fields = ("email", "project__name")
+    list_display = ("email", "scenario", "role", "invited_by", "created_at", "accepted_at")
+    list_filter = ("role", "scenario")
+    search_fields = ("email", "scenario__name")
     readonly_fields = ("token", "created_at", "accepted_at")
     actions = ("resend_invitation_email",)
 

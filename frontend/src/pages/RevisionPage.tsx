@@ -28,10 +28,10 @@ export function RevisionPage() {
     <>
       <PageHeader
         title={revision.scenario.name}
-        description={`${revision.project.name} / ${revision.label}${revision.framework ? ` / ${revision.framework}` : ""}`}
+        description={`${revision.label}${revision.framework ? ` / ${revision.framework}` : ""}`}
         actions={
-          <Link to={`/app/projects/${revision.project.slug}`} className="text-sm text-muted-foreground hover:text-foreground">
-            Back to project
+          <Link to={`/app/scenarios/${revision.scenario.slug}`} className="text-sm text-muted-foreground hover:text-foreground">
+            Back to scenario
           </Link>
         }
       />

@@ -1,11 +1,11 @@
 {% extends "workbench/base.html" %}
 
-{% block title %}Activity — {{ project.name }}{% endblock %}
+{% block title %}Activity — {{ scenario.name }}{% endblock %}
 
 {% block content %}
   <p class="breadcrumb">
-    <a href="{% url 'dashboard' %}">Projects</a> /
-    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> / Activity
+    <a href="{% url 'dashboard' %}">Scenarios</a> /
+    <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> / Activity
   </p>
   <h1>Activity</h1>
   <ul class="card-list">

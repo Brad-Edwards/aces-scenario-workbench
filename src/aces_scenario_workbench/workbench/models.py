@@ -48,12 +48,12 @@ class TimeStamped(models.Model):
         abstract = True
 
 
-class Project(TimeStamped):
+class Scenario(TimeStamped):
     slug = models.SlugField(unique=True)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     members = models.ManyToManyField(
-        settings.AUTH_USER_MODEL, through="Membership", related_name="projects"
+        settings.AUTH_USER_MODEL, through="Membership", related_name="scenarios"
     )
 
     class Meta:
@@ -64,7 +64,7 @@ class Project(TimeStamped):
 
 
 class Membership(TimeStamped):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="memberships")
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships"
     )
@@ -72,28 +72,12 @@ class Membership(TimeStamped):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["project", "user"], name="unique_project_member"),
+            models.UniqueConstraint(fields=["scenario", "user"], name="unique_scenario_member"),
         ]
-        ordering = ["project", "user"]
+        ordering = ["scenario", "user"]
 
     def __str__(self) -> str:
-        return f"{self.user} in {self.project} ({self.get_role_display()})"
-
-
-class Scenario(TimeStamped):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="scenarios")
-    slug = models.SlugField()
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["project", "slug"], name="unique_scenario_slug"),
-        ]
-        ordering = ["project", "name"]
-
-    def __str__(self) -> str:
-        return self.name
+        return f"{self.user} in {self.scenario} ({self.get_role_display()})"
 
 
 class Revision(TimeStamped):
@@ -278,7 +262,7 @@ class ReviewState(TimeStamped):
 
 
 class ActivityEvent(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="activity")
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name="activity")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

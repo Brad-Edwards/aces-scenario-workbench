@@ -4,7 +4,7 @@ from django.urls import path
 
 from . import api, collab, views
 
-_REV = "projects/<slug:project_slug>/scenarios/<slug:scenario_slug>/revisions/<int:revision_pk>/"
+_REV = "scenarios/<slug:scenario_slug>/revisions/<int:revision_pk>/"
 _OBJ = _REV + "objects/<str:object_type>/<str:object_stable_id>/"
 
 urlpatterns = [
@@ -14,8 +14,8 @@ urlpatterns = [
     path("app/", views.spa_app, name="spa-app"),
     path("app/<path:path>", views.spa_app, name="spa-app-deep"),
     path("dashboard/", views.dashboard, name="dashboard"),
-    path("projects/<slug:slug>/", views.project_detail, name="project-detail"),
-    path("projects/<slug:slug>/activity/", views.project_activity, name="project-activity"),
+    path("scenarios/<slug:slug>/", views.scenario_detail, name="scenario-detail"),
+    path("scenarios/<slug:slug>/activity/", views.scenario_activity, name="scenario-activity"),
     path(_REV, views.revision_overview, name="revision-overview"),
     path(_REV + "techniques/<str:technique_id>/", views.technique_detail, name="technique-detail"),
     path(_REV + "tactics/<str:tactic_id>/", views.tactic_detail, name="tactic-detail"),
@@ -25,15 +25,15 @@ urlpatterns = [
     path(_OBJ + "review-state", collab.set_review_state, name="object-review-state"),
     path(_OBJ + "decision", collab.record_decision, name="object-decision"),
     path("api/app/me", api.current_user, name="api-current-user"),
-    path("api/app/projects", api.project_list, name="api-projects"),
-    path("api/app/projects/<slug:slug>", api.project_detail, name="api-project-detail"),
+    path("api/app/scenarios", api.scenario_list, name="api-scenarios"),
+    path("api/app/scenarios/<slug:slug>", api.scenario_detail, name="api-scenario-detail"),
     path(
         "api/app/revisions/<int:revision_pk>",
         api.revision_workspace,
         name="api-revision-workspace",
     ),
     path(
-        "api/projects/<slug:slug>/revisions",
+        "api/scenarios/<slug:slug>/revisions",
         api.upload_revision,
         name="api-upload-revision",
     ),

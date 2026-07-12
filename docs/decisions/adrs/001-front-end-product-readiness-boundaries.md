@@ -14,7 +14,7 @@ The repository already has important boundaries that must remain intact:
 
 - ACES packs and review bundles are the source of scenario content; the
   workbench database owns collaboration state only.
-- Project membership is the authorization boundary, enforced in
+- Scenario membership is the authorization boundary, enforced in
   `workbench.access` and `workbench.authz`.
 - Account creation is invite-only through the existing accounts app.
 - Security posture is centralized in Django settings, middleware, CSP,
@@ -72,7 +72,7 @@ Security gates the implementation must pass:
 - Authentication: reuse Django auth views, the custom email user model,
   password validators, django-axes, and django-ratelimit. Do not create open
   registration or parallel login/reset flows.
-- Authorization: use `login_required`, `access.member_project`,
+- Authorization: use `login_required`, `access.member_scenario`,
   `access.scoped_revision`, and `authz.can_contribute`; hiding links is not
   authorization.
 - CSRF and destructive actions: account deletion and all state-changing forms
@@ -99,7 +99,7 @@ Canonical incumbents to build on:
 - Readiness reporting in `workbench.management.commands.doctor`.
 - URL names from `accounts.urls`, `workbench.urls`, and Django `admin:index`.
 - Account forms/views in `accounts.forms` and `accounts.views`.
-- Project authorization helpers in `workbench.access` and `workbench.authz`.
+- Scenario authorization helpers in `workbench.access` and `workbench.authz`.
 - Collaboration context/actions in `workbench.collab`.
 - Projection parsing/import rules in `workbench.ingest`.
 - Existing test suites for hardening, auth, accounts, review views, collab,

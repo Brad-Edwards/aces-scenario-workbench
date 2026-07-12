@@ -14,8 +14,8 @@ from aces_scenario_workbench.workbench.models import (
     DecisionType,
     Membership,
     ObjectType,
-    Project,
     Role,
+    Scenario,
 )
 
 User = get_user_model()
@@ -24,16 +24,16 @@ SAMPLE = settings.BASE_DIR / "fixtures" / "sample-scenario" / "atlas-technique-p
 
 @pytest.fixture
 def spa_workspace(db):
-    project = Project.objects.create(slug="demo", name="Demo Project", description="Demo access")
-    other = Project.objects.create(slug="other", name="Other Project")
+    scenario = Scenario.objects.create(slug="demo", name="Demo Scenario", description="Demo access")
+    other = Scenario.objects.create(slug="other", name="Other Scenario")
     member = User.objects.create_user(
         email="member@example.com", password="review-pass-42x", display_name="Member"
     )
     outsider = User.objects.create_user(email="outsider@example.com", password="review-pass-42x")
-    Membership.objects.create(project=project, user=member, role=Role.REVIEWER)
-    Membership.objects.create(project=other, user=outsider, role=Role.REVIEWER)
+    Membership.objects.create(scenario=scenario, user=member, role=Role.REVIEWER)
+    Membership.objects.create(scenario=other, user=outsider, role=Role.REVIEWER)
     data, _ = load_projection(SAMPLE)
-    revision, _ = import_projection(project, data)
+    revision, _ = import_projection(scenario, data)
     Comment.objects.create(
         revision=revision,
         object_type=ObjectType.STEP,
@@ -49,7 +49,7 @@ def spa_workspace(db):
         decision=DecisionType.NEEDS_CHANGE,
         rationale="Add the missing evidence note.",
     )
-    return project, other, revision, member, outsider
+    return scenario, other, revision, member, outsider
 
 
 def test_current_user_requires_login(client):
@@ -72,30 +72,30 @@ def test_current_user_payload(client, spa_workspace):
     }
 
 
-def test_project_list_is_scoped_to_membership(client, spa_workspace):
-    project, other, _, member, _ = spa_workspace
+def test_scenario_list_is_scoped_to_membership(client, spa_workspace):
+    scenario, other, _, member, _ = spa_workspace
     client.force_login(member)
 
-    response = client.get(reverse("api-projects"))
+    response = client.get(reverse("api-scenarios"))
 
     assert response.status_code == 200
     payload = response.json()
-    assert [row["slug"] for row in payload["projects"]] == [project.slug]
+    assert [row["slug"] for row in payload["scenarios"]] == [scenario.slug]
     assert other.slug not in json.dumps(payload)
-    assert payload["projects"][0]["role"] == "Reviewer"
-    assert payload["projects"][0]["scenarioCount"] == 1
-    assert payload["projects"][0]["revisionCount"] == 1
+    assert "project" not in json.dumps(payload).lower()
+    assert payload["scenarios"][0]["role"] == "Reviewer"
+    assert payload["scenarios"][0]["revisionCount"] == 1
 
 
-def test_project_detail_returns_table_ready_revisions(client, spa_workspace):
-    project, _, revision, member, _ = spa_workspace
+def test_scenario_detail_returns_table_ready_revisions(client, spa_workspace):
+    scenario, _, revision, member, _ = spa_workspace
     client.force_login(member)
 
-    response = client.get(reverse("api-project-detail", args=[project.slug]))
+    response = client.get(reverse("api-scenario-detail", args=[scenario.slug]))
 
     assert response.status_code == 200
     payload = response.json()
-    row = payload["scenarios"][0]["revisions"][0]
+    row = payload["revisions"][0]
     assert row["id"] == revision.pk
     assert row["moduleCount"] == revision.steps.count()
     assert row["techniqueCount"] == revision.techniques.count()
@@ -103,6 +103,7 @@ def test_project_detail_returns_table_ready_revisions(client, spa_workspace):
     assert row["commentCount"] == 1
     assert row["decisionCount"] == 1
     assert "digest" not in json.dumps(payload).lower()
+    assert "project" not in json.dumps(payload).lower()
 
 
 def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
@@ -120,11 +121,12 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert payload["comments"][0]["edited"] is False
     assert payload["decisions"][0]["decision"] == "Needs change"
     assert "digest" not in json.dumps(payload).lower()
+    assert "project" not in json.dumps(payload).lower()
 
 
 def test_spa_api_rejects_non_members(client, spa_workspace):
-    project, _, revision, _, outsider = spa_workspace
+    scenario, _, revision, _, outsider = spa_workspace
     client.force_login(outsider)
 
-    assert client.get(reverse("api-project-detail", args=[project.slug])).status_code == 404
+    assert client.get(reverse("api-scenario-detail", args=[scenario.slug])).status_code == 404
     assert client.get(reverse("api-revision-workspace", args=[revision.pk])).status_code == 404

@@ -24,7 +24,7 @@ aces-workbench serve                     # http://127.0.0.1:8000
 
 Before the first PyPI release, install from a source checkout with
 `pip install .`. See [`docs/setup.md`](docs/setup.md) for the full setup
-walkthrough (projects, invitations, email, password reset).
+walkthrough (scenarios, invitations, email, password reset).
 
 By default the workbench uses a local SQLite database (`db.sqlite3` in the
 current directory). Point it at PostgreSQL by setting `DATABASE_URL`:
@@ -34,7 +34,7 @@ export DATABASE_URL=postgres://user:pass@localhost:5432/workbench
 ```
 
 The Django admin defaults to `/control/` and is available to administrators for
-creating projects and managing membership. Set `ACES_WORKBENCH_ADMIN_PATH` to
+creating scenarios and managing membership. Set `ACES_WORKBENCH_ADMIN_PATH` to
 use a deployment-specific admin path.
 
 ## Documentation
@@ -90,14 +90,14 @@ restricted to administrators.
 aces-workbench serve [--host H] [--port P]   # run the app (applies migrations first)
 aces-workbench migrate                        # apply database migrations
 aces-workbench createadmin                    # create an administrator account
-aces-workbench import <path> --project <slug> # import a pack's ATLAS projection
+aces-workbench import <path> --scenario <slug> # import a pack's ATLAS projection
 aces-workbench doctor                         # report configuration readiness
 aces-workbench manage <command> [...]         # any Django management command
 ```
 
-Administrators create projects and invite members from the Django admin
+Administrators create scenarios and invite members from the Django admin
 (`/control/` by default); import a scenario pack's ATLAS technique projection with
-`aces-workbench import <pack-path> --project <slug>`.
+`aces-workbench import <pack-path> --scenario <slug>`.
 
 ## Development
 

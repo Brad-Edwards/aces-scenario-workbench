@@ -73,7 +73,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               </span>
               <ShellLink to="/app/">
                 <FolderKanban className="size-4" />
-                Projects
+                Scenarios
               </ShellLink>
             </div>
             <div className="flex flex-col gap-1">

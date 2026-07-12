@@ -14,15 +14,15 @@ from aces_scenario_workbench.workbench.ingest import (
     load_projection,
     parse_projection,
 )
-from aces_scenario_workbench.workbench.models import Membership, Project, Role
+from aces_scenario_workbench.workbench.models import Membership, Role, Scenario
 
 User = get_user_model()
 SAMPLE = settings.BASE_DIR / "fixtures" / "sample-scenario" / "atlas-technique-projection.yaml"
 
 
 @pytest.fixture
-def project(db):
-    return Project.objects.create(slug="demo", name="Demo Project")
+def scenario(db):
+    return Scenario.objects.create(slug="demo", name="Demo Scenario")
 
 
 def _sample_data():
@@ -30,10 +30,10 @@ def _sample_data():
     return data
 
 
-def test_import_creates_revision_graph(project):
-    revision, created = import_projection(project, _sample_data())
+def test_import_creates_revision_graph(scenario):
+    revision, created = import_projection(scenario, _sample_data())
     assert created is True
-    assert revision.scenario.slug == "sample-scenario"
+    assert revision.scenario.slug == "demo"
     assert revision.tactics.count() == 2
     assert revision.steps.count() == 2
     assert revision.techniques.count() == 3
@@ -45,24 +45,24 @@ def test_import_creates_revision_graph(project):
     assert [t.tactic_id for t in technique.tactics.all()] == ["AML.TA0002"]
 
 
-def test_import_is_idempotent(project):
-    revision1, created1 = import_projection(project, _sample_data())
-    revision2, created2 = import_projection(project, _sample_data())
+def test_import_is_idempotent(scenario):
+    revision1, created1 = import_projection(scenario, _sample_data())
+    revision2, created2 = import_projection(scenario, _sample_data())
     assert created1 is True
     assert created2 is False
     assert revision1.pk == revision2.pk
-    assert project.scenarios.get().revisions.count() == 1
+    assert scenario.revisions.count() == 1
 
 
-def test_changed_content_creates_new_revision(project):
-    import_projection(project, _sample_data())
+def test_changed_content_creates_new_revision(scenario):
+    import_projection(scenario, _sample_data())
     changed = _sample_data()
     changed["technique_catalog"].append(
         {"id": "AML.T9999", "name": "Extra", "tactics": ["AML.TA0002"], "challenge_step": "1"}
     )
-    revision, created = import_projection(project, changed)
+    revision, created = import_projection(scenario, changed)
     assert created is True
-    assert project.scenarios.get().revisions.count() == 2
+    assert scenario.revisions.count() == 2
     assert revision.techniques.count() == 4
 
 
@@ -93,30 +93,30 @@ def test_parse_projection_rejects_non_mapping():
         parse_projection(b"- one\n- two\n")
 
 
-def test_management_command(project):
-    call_command("import_projection", str(SAMPLE), project="demo")
-    call_command("import_projection", str(SAMPLE), project="demo")
-    assert Project.objects.get(slug="demo").scenarios.get().revisions.count() == 1
+def test_management_command(scenario):
+    call_command("import_projection", str(SAMPLE), scenario="demo")
+    call_command("import_projection", str(SAMPLE), scenario="demo")
+    assert scenario.revisions.count() == 1
 
 
 @pytest.mark.django_db
-def test_management_command_unknown_project():
+def test_management_command_unknown_scenario():
     with pytest.raises(CommandError):
-        call_command("import_projection", str(SAMPLE), project="missing")
+        call_command("import_projection", str(SAMPLE), scenario="missing")
 
 
-def test_management_command_bad_path(project):
+def test_management_command_bad_path(scenario):
     with pytest.raises(CommandError):
-        call_command("import_projection", str(SAMPLE.parent / "nope.yaml"), project="demo")
+        call_command("import_projection", str(SAMPLE.parent / "nope.yaml"), scenario="demo")
 
 
 def _upload():
     return SimpleUploadedFile("projection.yaml", SAMPLE.read_bytes(), content_type="text/yaml")
 
 
-def test_api_upload_author(client, project):
+def test_api_upload_author(client, scenario):
     author = User.objects.create_user(email="author@example.com", password="review-pass-1")
-    Membership.objects.create(project=project, user=author, role=Role.AUTHOR)
+    Membership.objects.create(scenario=scenario, user=author, role=Role.AUTHOR)
     client.force_login(author)
     url = reverse("api-upload-revision", args=["demo"])
 
@@ -129,31 +129,31 @@ def test_api_upload_author(client, project):
     assert again.json()["created"] is False
 
 
-def test_api_upload_forbidden_for_viewer(client, project):
+def test_api_upload_forbidden_for_viewer(client, scenario):
     viewer = User.objects.create_user(email="viewer@example.com", password="review-pass-1")
-    Membership.objects.create(project=project, user=viewer, role=Role.STAKEHOLDER)
+    Membership.objects.create(scenario=scenario, user=viewer, role=Role.STAKEHOLDER)
     client.force_login(viewer)
     response = client.post(reverse("api-upload-revision", args=["demo"]), {"file": _upload()})
     assert response.status_code == 403
 
 
-def test_api_upload_requires_file(client, project):
+def test_api_upload_requires_file(client, scenario):
     author = User.objects.create_user(email="author@example.com", password="review-pass-1")
-    Membership.objects.create(project=project, user=author, role=Role.AUTHOR)
+    Membership.objects.create(scenario=scenario, user=author, role=Role.AUTHOR)
     client.force_login(author)
     response = client.post(reverse("api-upload-revision", args=["demo"]))
     assert response.status_code == 400
 
 
-def test_api_upload_rejects_invalid_yaml(client, project):
+def test_api_upload_rejects_invalid_yaml(client, scenario):
     author = User.objects.create_user(email="author@example.com", password="review-pass-1")
-    Membership.objects.create(project=project, user=author, role=Role.AUTHOR)
+    Membership.objects.create(scenario=scenario, user=author, role=Role.AUTHOR)
     client.force_login(author)
     bad = SimpleUploadedFile("bad.yaml", b"- not\n- a mapping\n", content_type="text/yaml")
     response = client.post(reverse("api-upload-revision", args=["demo"]), {"file": bad})
     assert response.status_code == 400
 
 
-def test_api_upload_requires_login(client, project):
+def test_api_upload_requires_login(client, scenario):
     response = client.post(reverse("api-upload-revision", args=["demo"]), {"file": _upload()})
     assert response.status_code == 302

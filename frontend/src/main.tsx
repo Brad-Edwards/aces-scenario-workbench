@@ -4,9 +4,9 @@ import { createRoot } from "react-dom/client";
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
-import { ProjectPage } from "@/pages/ProjectPage";
-import { ProjectsPage } from "@/pages/ProjectsPage";
 import { RevisionPage } from "@/pages/RevisionPage";
+import { ScenarioPage } from "@/pages/ScenarioPage";
+import { ScenariosPage } from "@/pages/ScenariosPage";
 
 import "./index.css";
 
@@ -25,8 +25,8 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <AppShell>
           <Routes>
-            <Route path="/app/" element={<ProjectsPage />} />
-            <Route path="/app/projects/:slug" element={<ProjectPage />} />
+            <Route path="/app/" element={<ScenariosPage />} />
+            <Route path="/app/scenarios/:slug" element={<ScenarioPage />} />
             <Route path="/app/revisions/:id" element={<RevisionPage />} />
             <Route path="*" element={<Navigate to="/app/" replace />} />
           </Routes>

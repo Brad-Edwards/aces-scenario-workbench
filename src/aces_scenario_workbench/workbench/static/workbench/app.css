@@ -597,7 +597,7 @@ code {
   display: grid;
   gap: 8px;
 }
-.project-card a {
+.scenario-card a {
   font-size: 18px;
   font-weight: 800;
 }

@@ -4,9 +4,9 @@
 
 {% block content %}
   <p class="breadcrumb">
-    <a href="{% url 'dashboard' %}">Projects</a> /
-    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
-    <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
+    <a href="{% url 'dashboard' %}">Scenarios</a> /
+    <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
+    <a href="{% url 'revision-overview' scenario.slug revision.pk %}">{{ revision.label }}</a> /
     Technique
   </p>
   <h1>{{ object.technique_id }}</h1>
@@ -21,19 +21,19 @@
       <dt>Tactics</dt>
       <dd>
         {% for tactic in object.tactics.all %}
-          <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }}</a>
+          <a class="tag" href="{% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }}</a>
         {% empty %}—{% endfor %}
       </dd>
       <dt>Module</dt>
       <dd>
         {% if object.step %}
-          <a href="{% url 'step-detail' project.slug scenario.slug revision.pk object.step.path_step %}">Module {{ object.step.path_step }}</a>
+          <a href="{% url 'step-detail' scenario.slug revision.pk object.step.path_step %}">Module {{ object.step.path_step }}</a>
         {% else %}—{% endif %}
       </dd>
       <dt>Evidence</dt>
       <dd>
         {% if object.evidence %}
-          <a class="evidence" href="{% url 'evidence-detail' project.slug scenario.slug revision.pk object.evidence.evidence_id %}">{{ object.evidence.evidence_id }}</a>
+          <a class="evidence" href="{% url 'evidence-detail' scenario.slug revision.pk object.evidence.evidence_id %}">{{ object.evidence.evidence_id }}</a>
         {% else %}—{% endif %}
       </dd>
     </dl>
