@@ -4,7 +4,8 @@ name: Release Please
 # maintains a release PR ("chore(main): release X.Y.Z") that bumps
 # [project].version and CHANGELOG.md from the Conventional Commit history.
 # Merging that PR tags vX.Y.Z and cuts the GitHub Release; the publish job then
-# builds the wheel/sdist and publishes to PyPI over OIDC trusted publishing.
+# builds the wheel/sdist and publishes to PyPI over OIDC trusted publishing, and
+# the docker job builds and pushes the container image to GHCR.
 # Feature PRs never touch CHANGELOG.md.
 #
 # The release PR is opened by GITHUB_TOKEN, so required CI checks do not auto-run
@@ -64,3 +65,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "${TAG}" dist/* --clobber
+
+  docker:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # push the image to GHCR under this repository's owner
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build and push the container image
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          version="${TAG#v}"
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          image="ghcr.io/${owner}/aces-workbench"
+          docker build -t "${image}:${version}" -t "${image}:latest" .
+          docker push "${image}:${version}"
+          docker push "${image}:latest"
