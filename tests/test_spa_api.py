@@ -115,8 +115,18 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert response.status_code == 200
     payload = response.json()
     first_module = next(module for module in payload["modules"] if module["id"] == "1")
+    first_technique = next(
+        technique for technique in payload["techniques"] if technique["id"] == "AML.T0000"
+    )
     assert first_module["commentCount"] == 1
     assert first_module["decisionCount"] == 1
+    assert first_module["behaviorSpecification"] == "module-01-recon"
+    assert first_module["flagOutcome"] == "recon"
+    assert first_module["justification"] == "Directly selectable reconnaissance action."
+    assert first_technique["surface"] == "research-workbench"
+    assert first_technique["relationship"] == "planned_variant"
+    assert first_technique["coverageStatus"] == "planned"
+    assert first_technique["rationale"] == "A reconnaissance variant satisfied only by ev-recon."
     assert payload["comments"][0]["body"] == "Needs one check."
     assert payload["comments"][0]["edited"] is False
     assert payload["decisions"][0]["decision"] == "Needs change"

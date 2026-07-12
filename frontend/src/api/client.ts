@@ -39,9 +39,12 @@ export type RevisionWorkspace = {
   modules: Array<{
     id: string;
     name: string;
+    behaviorSpecification: string;
     tier: string;
     objective: string;
     minutes: number | null;
+    flagOutcome: string;
+    justification: string;
     techniqueCount: number;
     evidenceCount: number;
     commentCount: number;
@@ -53,7 +56,11 @@ export type RevisionWorkspace = {
     module: string;
     tactics: string[];
     evidence: string;
+    surface: string;
+    relationship: string;
+    coverageStatus: string;
     plannedAction: string;
+    rationale: string;
     commentCount: number;
     decisionCount: number;
   }>;

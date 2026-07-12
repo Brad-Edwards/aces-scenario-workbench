@@ -1,12 +1,11 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getScenario } from "@/api/client";
-import { Card, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import { Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 
 export function ScenarioPage() {
   const { slug = "" } = useParams();
-  const navigate = useNavigate();
   const query = useQuery({
     queryKey: ["scenario", slug],
     queryFn: () => getScenario(slug),
@@ -44,18 +43,10 @@ export function ScenarioPage() {
             </thead>
             <tbody>
               {revisions.map((revision) => (
-                <tr
+                <ClickableRow
                   key={revision.id}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => navigate(`/app/revisions/${revision.id}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/app/revisions/${revision.id}`);
-                    }
-                  }}
-                  className="cursor-pointer transition-colors hover:bg-muted/50 focus:bg-muted/50 focus:outline-none"
+                  to={`/app/revisions/${revision.id}`}
+                  aria-label={`Open revision ${revision.label}`}
                 >
                   <Td className="font-medium">
                     <Link to={`/app/revisions/${revision.id}`} className="hover:underline">
@@ -74,7 +65,7 @@ export function ScenarioPage() {
                   <Td className="text-right font-mono tabular-nums">{revision.commentCount}</Td>
                   <Td className="text-right font-mono tabular-nums">{revision.decisionCount}</Td>
                   <Td className="text-muted-foreground">{formatDate(revision.createdAt)}</Td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </Table>

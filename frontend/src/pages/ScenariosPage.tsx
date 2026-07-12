@@ -1,11 +1,10 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getScenarios } from "@/api/client";
-import { Card, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import { Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 
 export function ScenariosPage() {
-  const navigate = useNavigate();
   const query = useQuery({ queryKey: ["scenarios"], queryFn: getScenarios });
   const scenarios = query.data?.scenarios ?? [];
 
@@ -34,18 +33,10 @@ export function ScenariosPage() {
             </thead>
             <tbody>
               {scenarios.map((scenario) => (
-                <tr
+                <ClickableRow
                   key={scenario.slug}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => navigate(`/app/scenarios/${scenario.slug}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/app/scenarios/${scenario.slug}`);
-                    }
-                  }}
-                  className="cursor-pointer transition-colors hover:bg-muted/50 focus:bg-muted/50 focus:outline-none"
+                  to={`/app/scenarios/${scenario.slug}`}
+                  aria-label={`Open ${scenario.name}`}
                 >
                   <Td className="font-medium">
                     <Link to={`/app/scenarios/${scenario.slug}`} className="hover:underline">
@@ -60,7 +51,7 @@ export function ScenariosPage() {
                   <Td className="capitalize text-muted-foreground">{scenario.role}</Td>
                   <Td className="text-right font-mono tabular-nums">{scenario.revisionCount}</Td>
                   <Td className="text-muted-foreground">{formatDate(scenario.updatedAt)}</Td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </Table>

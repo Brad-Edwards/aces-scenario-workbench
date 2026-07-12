@@ -2,7 +2,8 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getRevision, type RevisionWorkspace } from "@/api/client";
-import { Badge, Card, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import { Badge, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import { evidencePath, modulePath, objectPath, techniquePath } from "@/lib/workspaceRoutes";
 
 type TabKey = "modules" | "techniques" | "evidence" | "comments" | "decisions";
 
@@ -87,8 +88,16 @@ function ModulesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
           </thead>
           <tbody>
             {revision.modules.map((module) => (
-              <tr key={module.id} className="transition-colors hover:bg-muted/50">
-                <Td className="font-medium">{module.name || `Module ${module.id}`}</Td>
+              <ClickableRow
+                key={module.id}
+                to={modulePath(revision.id, module.id)}
+                aria-label={`Open module ${module.id}`}
+              >
+                <Td className="font-medium">
+                  <Link to={modulePath(revision.id, module.id)} className="hover:underline">
+                    {module.name || `Module ${module.id}`}
+                  </Link>
+                </Td>
                 <Td>{module.tier ? <Badge>{module.tier}</Badge> : "—"}</Td>
                 <Td className="min-w-[420px] whitespace-normal text-muted-foreground">{module.objective || "—"}</Td>
                 <Td className="text-right font-mono tabular-nums">{module.minutes ?? "—"}</Td>
@@ -96,7 +105,7 @@ function ModulesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
                 <Td className="text-right font-mono tabular-nums">{module.evidenceCount}</Td>
                 <Td className="text-right font-mono tabular-nums">{module.commentCount}</Td>
                 <Td className="text-right font-mono tabular-nums">{module.decisionCount}</Td>
-              </tr>
+              </ClickableRow>
             ))}
           </tbody>
         </Table>
@@ -123,20 +132,44 @@ function TechniquesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
         </thead>
         <tbody>
           {revision.techniques.map((technique) => (
-            <tr key={technique.id} className="transition-colors hover:bg-muted/50">
-              <Td className="font-mono font-medium">{technique.id}</Td>
+            <ClickableRow
+              key={technique.id}
+              to={techniquePath(revision.id, technique.id)}
+              aria-label={`Open ${technique.id}`}
+            >
+              <Td className="font-mono font-medium">
+                <Link to={techniquePath(revision.id, technique.id)} className="hover:underline">
+                  {technique.id}
+                </Link>
+              </Td>
               <Td className="font-medium">{technique.name}</Td>
-              <Td>{technique.module || "—"}</Td>
+              <Td>
+                {technique.module ? (
+                  <Link to={modulePath(revision.id, technique.module)} className="font-mono hover:underline">
+                    {technique.module}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </Td>
               <Td className="max-w-[280px] whitespace-normal text-muted-foreground">
                 {technique.tactics.length ? technique.tactics.join(", ") : "—"}
               </Td>
-              <Td className="font-mono text-muted-foreground">{technique.evidence || "—"}</Td>
+              <Td className="font-mono text-muted-foreground">
+                {technique.evidence ? (
+                  <Link to={evidencePath(revision.id, technique.evidence)} className="hover:underline">
+                    {technique.evidence}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </Td>
               <Td className="min-w-[420px] whitespace-normal text-muted-foreground">
                 {technique.plannedAction || "—"}
               </Td>
               <Td className="text-right font-mono tabular-nums">{technique.commentCount}</Td>
               <Td className="text-right font-mono tabular-nums">{technique.decisionCount}</Td>
-            </tr>
+            </ClickableRow>
           ))}
         </tbody>
       </Table>
@@ -159,13 +192,21 @@ function EvidenceTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) 
         </thead>
         <tbody>
           {revision.evidence.map((item) => (
-            <tr key={item.id} className="transition-colors hover:bg-muted/50">
-              <Td className="font-mono font-medium">{item.id}</Td>
+            <ClickableRow
+              key={item.id}
+              to={evidencePath(revision.id, item.id)}
+              aria-label={`Open evidence ${item.id}`}
+            >
+              <Td className="font-mono font-medium">
+                <Link to={evidencePath(revision.id, item.id)} className="hover:underline">
+                  {item.id}
+                </Link>
+              </Td>
               <Td className="min-w-[420px] whitespace-normal text-muted-foreground">{item.description || "—"}</Td>
               <Td className="text-right font-mono tabular-nums">{item.techniqueCount}</Td>
               <Td className="text-right font-mono tabular-nums">{item.commentCount}</Td>
               <Td className="text-right font-mono tabular-nums">{item.decisionCount}</Td>
-            </tr>
+            </ClickableRow>
           ))}
         </tbody>
       </Table>
@@ -189,17 +230,28 @@ function CommentsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) 
             </tr>
           </thead>
           <tbody>
-            {revision.comments.map((comment) => (
-              <tr key={comment.id} className="transition-colors hover:bg-muted/50">
-                <Td className="font-mono">{comment.objectType}:{comment.objectId}</Td>
-                <Td className="min-w-[460px] whitespace-pre-wrap text-muted-foreground">
-                  {comment.body}
-                  {comment.edited ? <span className="ml-2 text-xs">(edited)</span> : null}
-                </Td>
-                <Td>{comment.author}</Td>
-                <Td className="text-muted-foreground">{formatDate(comment.createdAt)}</Td>
-              </tr>
-            ))}
+            {revision.comments.map((comment) => {
+              const target = objectPath(revision.id, comment.objectType, comment.objectId);
+              return (
+                <ClickableRow
+                  key={comment.id}
+                  to={target}
+                  aria-label={`Open ${objectLabel(comment.objectType)} ${comment.objectId}`}
+                >
+                  <Td className="font-mono">
+                    <Link to={target} className="hover:underline">
+                      {comment.objectType}:{comment.objectId}
+                    </Link>
+                  </Td>
+                  <Td className="min-w-[460px] whitespace-pre-wrap text-muted-foreground">
+                    {comment.body}
+                    {comment.edited ? <span className="ml-2 text-xs">(edited)</span> : null}
+                  </Td>
+                  <Td>{comment.author}</Td>
+                  <Td className="text-muted-foreground">{formatDate(comment.createdAt)}</Td>
+                </ClickableRow>
+              );
+            })}
           </tbody>
         </Table>
       )}
@@ -224,17 +276,30 @@ function DecisionsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>)
             </tr>
           </thead>
           <tbody>
-            {revision.decisions.map((decision) => (
-              <tr key={decision.id} className="transition-colors hover:bg-muted/50">
-                <Td className="font-mono">{decision.objectType}:{decision.objectId}</Td>
-                <Td>
-                  <Badge>{decision.decision}</Badge>
-                </Td>
-                <Td className="min-w-[420px] whitespace-normal text-muted-foreground">{decision.rationale || "—"}</Td>
-                <Td>{decision.author}</Td>
-                <Td className="text-muted-foreground">{formatDate(decision.createdAt)}</Td>
-              </tr>
-            ))}
+            {revision.decisions.map((decision) => {
+              const target = objectPath(revision.id, decision.objectType, decision.objectId);
+              return (
+                <ClickableRow
+                  key={decision.id}
+                  to={target}
+                  aria-label={`Open ${objectLabel(decision.objectType)} ${decision.objectId}`}
+                >
+                  <Td className="font-mono">
+                    <Link to={target} className="hover:underline">
+                      {decision.objectType}:{decision.objectId}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <Badge>{decision.decision}</Badge>
+                  </Td>
+                  <Td className="min-w-[420px] whitespace-normal text-muted-foreground">
+                    {decision.rationale || "—"}
+                  </Td>
+                  <Td>{decision.author}</Td>
+                  <Td className="text-muted-foreground">{formatDate(decision.createdAt)}</Td>
+                </ClickableRow>
+              );
+            })}
           </tbody>
         </Table>
       )}
@@ -244,4 +309,9 @@ function DecisionsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>)
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function objectLabel(objectType: string) {
+  if (objectType === "step") return "module";
+  return objectType;
 }

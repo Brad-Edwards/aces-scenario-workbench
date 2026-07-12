@@ -1,5 +1,11 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
-import { Link, type LinkProps } from "react-router-dom";
+import type {
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from "react";
+import { Link, useNavigate, type LinkProps } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 
@@ -71,6 +77,56 @@ export function Th({ className, ...props }: HTMLAttributes<HTMLTableCellElement>
 
 export function Td({ className, ...props }: HTMLAttributes<HTMLTableCellElement>) {
   return <td className={cn("border-t border-border px-3 py-3 align-middle", className)} {...props} />;
+}
+
+type ClickableRowProps = HTMLAttributes<HTMLTableRowElement> & {
+  to: string;
+};
+
+export function ClickableRow({
+  to,
+  className,
+  onClick,
+  onKeyDown,
+  ...props
+}: ClickableRowProps) {
+  const navigate = useNavigate();
+
+  function openRow(event: MouseEvent<HTMLTableRowElement>) {
+    onClick?.(event);
+    if (event.defaultPrevented || isInteractiveTarget(event.target)) return;
+    navigate(to);
+  }
+
+  function openRowFromKeyboard(event: KeyboardEvent<HTMLTableRowElement>) {
+    onKeyDown?.(event);
+    if (event.defaultPrevented) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      navigate(to);
+    }
+  }
+
+  return (
+    <tr
+      role="link"
+      tabIndex={0}
+      onClick={openRow}
+      onKeyDown={openRowFromKeyboard}
+      className={cn(
+        "cursor-pointer transition-colors hover:bg-muted/50 focus:bg-muted/50 focus:outline-none",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("a,button,input,select,textarea,summary,[data-ignore-row-click]"))
+  );
 }
 
 export function EmptyState({
