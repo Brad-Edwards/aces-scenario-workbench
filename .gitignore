@@ -22,3 +22,6 @@ htmlcov/
 
 # Local-only working notes (never committed)
 .local/
+
+# Playwright MCP artifacts
+.playwright-mcp/

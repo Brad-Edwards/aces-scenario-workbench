@@ -27,6 +27,9 @@ def _env_list(name: str, default: str) -> list[str]:
 # A stable key must be provided in any non-local deployment; the random fallback
 # keeps local use zero-config without committing a secret.
 SECRET_KEY = os.environ.get("ACES_WORKBENCH_SECRET_KEY") or get_random_secret_key()
+# True when no stable key was supplied (sessions reset on restart) — surfaced by
+# `aces-workbench doctor`.
+SECRET_KEY_IS_EPHEMERAL = "ACES_WORKBENCH_SECRET_KEY" not in os.environ
 
 DEBUG = _env_bool("ACES_WORKBENCH_DEBUG", False)
 
@@ -109,6 +112,20 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "landing"
+
+# Email. The console backend (prints messages) is the default so local use needs
+# no mail server; set the SMTP host to deliver for real. Credentials are read
+# from the environment, never source.
+EMAIL_HOST = os.environ.get("ACES_WORKBENCH_EMAIL_HOST", "")
+if EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_PORT = int(os.environ.get("ACES_WORKBENCH_EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("ACES_WORKBENCH_EMAIL_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("ACES_WORKBENCH_EMAIL_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("ACES_WORKBENCH_EMAIL_USE_TLS", True)
+DEFAULT_FROM_EMAIL = os.environ.get("ACES_WORKBENCH_DEFAULT_FROM_EMAIL", "aces-workbench@localhost")
 
 # Baseline security posture. Cookie/redirect hardening defaults follow DEBUG and
 # can be overridden per deployment.
