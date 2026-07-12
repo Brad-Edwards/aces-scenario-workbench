@@ -7,7 +7,7 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="{% static 'workbench/app.css' %}">
     <title>{% block title %}ACES Scenario Workbench{% endblock %}</title>
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
       (function () {
         try {
           const stored = globalThis.localStorage.getItem("aces-theme");

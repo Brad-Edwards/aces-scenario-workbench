@@ -31,6 +31,26 @@ class Command(BaseCommand):
         message = "up to date" if not pending else f"{len(pending)} unapplied"
         self._report("Migrations", message, not pending)
 
+    def _report_hardening(self) -> None:
+        # Outside debug the HTTPS controls should be on; in debug they are
+        # expected off, so report them as acceptable for local development.
+        dev = settings.DEBUG
+        secure_cookies = settings.SESSION_COOKIE_SECURE and settings.CSRF_COOKIE_SECURE
+        self._report(
+            "HTTPS redirect",
+            "on" if settings.SECURE_SSL_REDIRECT else "off",
+            dev or settings.SECURE_SSL_REDIRECT,
+        )
+        self._report(
+            "HSTS",
+            f"{settings.SECURE_HSTS_SECONDS}s" if settings.SECURE_HSTS_SECONDS else "off",
+            dev or settings.SECURE_HSTS_SECONDS > 0,
+        )
+        self._report("Secure cookies", "on" if secure_cookies else "off", dev or secure_cookies)
+        self._report("Brute-force protection", "django-axes", "axes" in settings.INSTALLED_APPS)
+        csp_on = "csp.middleware.CSPMiddleware" in settings.MIDDLEWARE
+        self._report("Content-Security-Policy", "on" if csp_on else "off", csp_on)
+
     def handle(self, *args: Any, **options: Any) -> None:
         python_version = ".".join(str(part) for part in sys.version_info[:3])
         self._report("Python", python_version, sys.version_info >= (3, 12))
@@ -50,3 +70,4 @@ class Command(BaseCommand):
         smtp = settings.EMAIL_BACKEND.endswith("smtp.EmailBackend")
         self._report("Email", "SMTP" if smtp else "console (no delivery)", smtp)
         self._report("Debug", str(settings.DEBUG), not settings.DEBUG)
+        self._report_hardening()

@@ -18,6 +18,10 @@ services:
       ACES_WORKBENCH_SECRET_KEY: ${ACES_WORKBENCH_SECRET_KEY:?set a secret key}
       ACES_WORKBENCH_ALLOWED_HOSTS: ${ACES_WORKBENCH_ALLOWED_HOSTS:-localhost,127.0.0.1}
       ACES_WORKBENCH_DEBUG: "0"
+      # This stack serves plain HTTP on localhost, so disable the HTTPS controls
+      # that are on by default outside debug. Enable them behind real TLS.
+      ACES_WORKBENCH_SSL_REDIRECT: "0"
+      ACES_WORKBENCH_SECURE_COOKIES: "0"
     ports:
       - "8000:8000"
     depends_on:

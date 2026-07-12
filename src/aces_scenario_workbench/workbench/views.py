@@ -28,6 +28,15 @@ def privacy(request: HttpRequest) -> HttpResponse:
     return render(request, "workbench/privacy.html")
 
 
+def ratelimited(request: HttpRequest, _: Exception | None = None) -> HttpResponse:
+    """Response for a request that exceeded a rate limit.
+
+    Registered as ``RATELIMIT_VIEW``; django-ratelimit passes the raised
+    exception as the second positional argument, which this view does not need.
+    """
+    return render(request, "429.html", status=429)
+
+
 @login_required
 @require_GET
 def dashboard(request: HttpRequest) -> HttpResponse:
