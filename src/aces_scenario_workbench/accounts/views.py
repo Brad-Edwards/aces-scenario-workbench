@@ -39,7 +39,7 @@ def _apply_invitation(
         # Multiple auth backends are configured (django-axes sits in front of the
         # model backend), so the backend must be named for a manual login.
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-        return redirect("dashboard")
+        return redirect("spa-app")
     return None
 
 

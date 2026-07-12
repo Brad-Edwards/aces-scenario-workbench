@@ -109,6 +109,15 @@ uv run ruff format .   # format
 make hooks             # activate commit-time hooks (once per clone)
 ```
 
+The authenticated workspace shell is a Vite/React SPA. Rebuild the Django-served
+assets after frontend changes:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the developer workflow.
 
 ## Deployment

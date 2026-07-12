@@ -100,11 +100,15 @@ def test_missing_object_returns_404(client, workspace):
     assert client.get(url).status_code == 404
 
 
-def test_landing_has_theme_toggle_and_stylesheet(client):
-    response = client.get(reverse("landing"))
-    assert b"data-theme-toggle" in response.content
-    assert b"workbench/app.css" in response.content
-    assert b"data-cookie-notice" in response.content
+def test_spa_shell_uses_standalone_assets(client, workspace):
+    _, _, member = workspace
+    client.force_login(member)
+    response = client.get(reverse("spa-app"))
+    assert response.status_code == 200
+    assert b"workbench/spa/app.css" in response.content
+    assert b"workbench/spa/app.js" in response.content
+    assert b"data-theme-toggle" not in response.content
+    assert b"data-cookie-notice" not in response.content
 
 
 def test_revision_overview_has_filter_toolbar(client, workspace):

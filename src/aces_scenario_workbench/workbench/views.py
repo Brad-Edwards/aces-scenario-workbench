@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from . import access
@@ -25,8 +25,17 @@ def healthz(request: HttpRequest) -> JsonResponse:
 
 @require_GET
 def landing(request: HttpRequest) -> HttpResponse:
-    """Public entry page."""
-    return render(request, "workbench/landing.html")
+    """Route users to the correct application entry point."""
+    if request.user.is_authenticated:
+        return redirect("spa-app")
+    return redirect("login")
+
+
+@login_required
+@require_GET
+def spa_app(request: HttpRequest, path: str = "") -> HttpResponse:
+    """Authenticated SPA shell."""
+    return render(request, "workbench/spa.html")
 
 
 @require_GET

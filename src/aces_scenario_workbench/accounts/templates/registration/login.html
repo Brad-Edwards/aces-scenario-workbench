@@ -1,41 +1,53 @@
-{% extends "workbench/base.html" %}
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Sign in to ACES Scenario Workbench">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" href="{% static 'workbench/brand-mark.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{% static 'workbench/auth.css' %}">
+    <title>Sign in — ACES Workbench</title>
+  </head>
+  <body>
+    <main class="auth-page">
+      <section class="auth-card" aria-labelledby="login-title">
+        <div class="brand">
+          <img src="{% static 'workbench/brand-mark.svg' %}" alt="" width="32" height="32">
+          <span>ACES Workbench</span>
+        </div>
+        <p class="eyebrow">Project access</p>
+        <h1 id="login-title">Sign in</h1>
+        <p class="lede">Use the account your workspace administrator created or invited.</p>
 
-{% block title %}Sign in — ACES Scenario Workbench{% endblock %}
+        {% if form.errors %}
+          <div class="error-summary" role="alert">
+            Your email and password did not match. Please try again.
+          </div>
+        {% endif %}
 
-{% block content %}
-  <section class="auth-shell">
-    <div class="panel auth-card">
-      <p class="eyebrow">Project workspace</p>
-      <h1>Sign in</h1>
-      <p class="subhead">Use the account your workspace administrator created or invited.</p>
-      {% if form.errors %}
-        <div class="error-summary" role="alert">
-          <p>Your email and password did not match. Please try again.</p>
+        <form method="post" action="{% url 'login' %}">
+          {% csrf_token %}
+          <div class="field">
+            <label for="{{ form.username.id_for_label }}">Email</label>
+            {{ form.username }}
+            {% if form.username.errors %}<div class="field-error">{{ form.username.errors }}</div>{% endif %}
+          </div>
+          <div class="field">
+            <label for="{{ form.password.id_for_label }}">Password</label>
+            {{ form.password }}
+            {% if form.password.errors %}<div class="field-error">{{ form.password.errors }}</div>{% endif %}
+          </div>
+          <input type="hidden" name="next" value="{{ next }}">
+          <button type="submit">Sign in</button>
+        </form>
+
+        <div class="secondary-actions">
+          <a href="{% url 'password_reset' %}">Forgot your password?</a>
+          <a href="{% url 'privacy' %}">Privacy</a>
         </div>
-      {% endif %}
-      <form method="post" action="{% url 'login' %}" class="stacked-form">
-        {% csrf_token %}
-        <div class="field">
-          <label for="{{ form.username.id_for_label }}">Email</label>
-          {{ form.username }}
-          {% if form.username.errors %}<div class="field-error">{{ form.username.errors }}</div>{% endif %}
-        </div>
-        <div class="field">
-          <label for="{{ form.password.id_for_label }}">Password</label>
-          {{ form.password }}
-          {% if form.password.errors %}<div class="field-error">{{ form.password.errors }}</div>{% endif %}
-        </div>
-        <input type="hidden" name="next" value="{{ next }}">
-        <button type="submit">Sign in</button>
-      </form>
-      <p><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
-    </div>
-    <aside class="auth-note">
-      <h2>No open registration</h2>
-      <p>
-        Access is invite-only. Ask a workspace administrator for an invitation
-        if you need access to a project.
-      </p>
-    </aside>
-  </section>
-{% endblock %}
+      </section>
+    </main>
+  </body>
+</html>

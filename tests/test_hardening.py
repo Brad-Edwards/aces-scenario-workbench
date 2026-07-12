@@ -23,17 +23,17 @@ PASSWORD = "review-pass-42x"
 # --- Content Security Policy -------------------------------------------------
 
 
-def test_csp_header_carries_script_nonce(client):
+def test_login_csp_has_no_inline_scripts(client):
     response = client.get(reverse("login"))
     assert response.status_code == 200
     policy = response.headers.get("Content-Security-Policy", "")
     assert "default-src 'self'" in policy
     assert "object-src 'none'" in policy
     assert "frame-ancestors 'none'" in policy
-    assert "script-src 'self' 'nonce-" in policy
-    # The inline theme script must carry the exact nonce advertised in the header.
-    nonce = policy.split("'nonce-", 1)[1].split("'", 1)[0]
-    assert f'nonce="{nonce}"'.encode() in response.content
+    assert "script-src 'self'" in policy
+    assert "'unsafe-inline'" not in policy
+    assert b"<script" not in response.content
+    assert b"data-theme-toggle" not in response.content
 
 
 def test_csp_excludes_admin(client):

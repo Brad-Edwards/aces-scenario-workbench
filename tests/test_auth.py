@@ -49,7 +49,7 @@ def test_login_view_authenticates(client, member):
         {"username": "member@example.com", "password": STRONG_PASSWORD},
     )
     assert response.status_code == 302
-    assert response.url == reverse("dashboard")
+    assert response.url == reverse("spa-app")
 
 
 def test_invite_accept_new_user(client, project):
@@ -67,7 +67,7 @@ def test_invite_accept_new_user(client, project):
         {"display_name": "New Author", "password1": STRONG_PASSWORD, "password2": STRONG_PASSWORD},
     )
     assert post_response.status_code == 302
-    assert post_response.url == reverse("dashboard")
+    assert post_response.url == reverse("spa-app")
     user = User.objects.get(email="new@example.com")
     assert user.display_name == "New Author"
     assert Membership.objects.filter(project=project, user=user, role=Role.AUTHOR).exists()

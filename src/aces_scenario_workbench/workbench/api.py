@@ -3,13 +3,22 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from . import authz
 from .ingest import ProjectionError, import_projection, parse_projection
-from .models import Project, Role
+from .models import (
+    Evidence,
+    ObjectType,
+    Project,
+    Revision,
+    Role,
+    Step,
+    Technique,
+)
 
 _ALLOWED_ROLES = {Role.AUTHOR, Role.ADMINISTRATOR}
 
@@ -47,3 +56,241 @@ def upload_revision(request: HttpRequest, slug: str) -> HttpResponse:
         {"revision": revision.pk, "created": created, "mapping_id": revision.mapping_id},
         status=201 if created else 200,
     )
+
+
+@login_required
+@require_GET
+def current_user(request: HttpRequest) -> JsonResponse:
+    return JsonResponse(
+        {
+            "email": request.user.email,
+            "displayName": request.user.get_short_name(),
+            "isStaff": request.user.is_staff,
+        }
+    )
+
+
+@login_required
+@require_GET
+def project_list(request: HttpRequest) -> JsonResponse:
+    projects = (
+        Project.objects.filter(memberships__user=request.user)
+        .annotate(
+            scenario_count=Count("scenarios", distinct=True),
+            revision_count=Count("scenarios__revisions", distinct=True),
+        )
+        .prefetch_related("memberships")
+    )
+    return JsonResponse({"projects": [_project_row(project, request.user) for project in projects]})
+
+
+@login_required
+@require_GET
+def project_detail(request: HttpRequest, slug: str) -> JsonResponse:
+    project = get_object_or_404(
+        Project.objects.annotate(
+            scenario_count=Count("scenarios", distinct=True),
+            revision_count=Count("scenarios__revisions", distinct=True),
+        ).prefetch_related(
+            "memberships",
+            "scenarios__revisions",
+            "scenarios__revisions__steps",
+            "scenarios__revisions__techniques",
+            "scenarios__revisions__evidence",
+            "scenarios__revisions__comments",
+            "scenarios__revisions__decisions",
+        ),
+        slug=slug,
+        memberships__user=request.user,
+    )
+    return JsonResponse(
+        {
+            "project": _project_row(project, request.user),
+            "scenarios": [
+                {
+                    "slug": scenario.slug,
+                    "name": scenario.name,
+                    "description": scenario.description,
+                    "revisions": [_revision_row(revision) for revision in scenario.revisions.all()],
+                }
+                for scenario in project.scenarios.all()
+            ],
+        }
+    )
+
+
+@login_required
+@require_GET
+def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
+    revision = get_object_or_404(
+        Revision.objects.select_related("scenario", "scenario__project").prefetch_related(
+            "steps",
+            "steps__techniques",
+            "steps__techniques__evidence",
+            "techniques",
+            "techniques__tactics",
+            "techniques__evidence",
+            "evidence",
+            "evidence__techniques",
+            "comments",
+            "comments__author",
+            "decisions",
+            "decisions__author",
+        ),
+        pk=revision_pk,
+        scenario__project__memberships__user=request.user,
+    )
+    comment_counts = _anchor_counts(revision.comments.all())
+    decision_counts = _anchor_counts(revision.decisions.all())
+    return JsonResponse(
+        {
+            "id": revision.pk,
+            "label": revision.label,
+            "project": {
+                "slug": revision.scenario.project.slug,
+                "name": revision.scenario.project.name,
+            },
+            "scenario": {
+                "slug": revision.scenario.slug,
+                "name": revision.scenario.name,
+                "description": revision.scenario.description,
+            },
+            "framework": _framework_label(revision),
+            "createdAt": revision.created_at.isoformat(),
+            "modules": [
+                _module_row(step, comment_counts, decision_counts) for step in revision.steps.all()
+            ],
+            "techniques": [
+                _technique_row(technique, comment_counts, decision_counts)
+                for technique in revision.techniques.all()
+            ],
+            "evidence": [
+                _evidence_row(evidence, comment_counts, decision_counts)
+                for evidence in revision.evidence.all()
+            ],
+            "comments": [
+                {
+                    "id": comment.pk,
+                    "objectType": comment.object_type,
+                    "objectId": comment.object_stable_id,
+                    "body": comment.body,
+                    "author": comment.author.get_short_name(),
+                    "createdAt": comment.created_at.isoformat(),
+                    "updatedAt": comment.updated_at.isoformat(),
+                    "edited": False,
+                }
+                for comment in revision.comments.all()
+            ],
+            "decisions": [
+                {
+                    "id": decision.pk,
+                    "objectType": decision.object_type,
+                    "objectId": decision.object_stable_id,
+                    "decision": decision.get_decision_display(),
+                    "rationale": decision.rationale,
+                    "author": decision.author.get_short_name(),
+                    "createdAt": decision.created_at.isoformat(),
+                }
+                for decision in revision.decisions.all()
+            ],
+        }
+    )
+
+
+def _project_row(project: Project, user: object) -> dict[str, object]:
+    membership = next(
+        (membership for membership in project.memberships.all() if membership.user_id == user.pk),
+        None,
+    )
+    return {
+        "slug": project.slug,
+        "name": project.name,
+        "description": project.description,
+        "role": membership.get_role_display() if membership else "",
+        "scenarioCount": getattr(project, "scenario_count", project.scenarios.count()),
+        "revisionCount": getattr(project, "revision_count", 0),
+        "updatedAt": project.updated_at.isoformat(),
+    }
+
+
+def _revision_row(revision: Revision) -> dict[str, object]:
+    return {
+        "id": revision.pk,
+        "label": revision.label,
+        "packVersion": revision.pack_version,
+        "framework": _framework_label(revision),
+        "createdAt": revision.created_at.isoformat(),
+        "updatedAt": revision.updated_at.isoformat(),
+        "moduleCount": revision.steps.count(),
+        "techniqueCount": revision.techniques.count(),
+        "evidenceCount": revision.evidence.count(),
+        "commentCount": revision.comments.count(),
+        "decisionCount": revision.decisions.count(),
+    }
+
+
+def _framework_label(revision: Revision) -> str:
+    return " ".join(part for part in (revision.framework_name, revision.framework_release) if part)
+
+
+def _anchor_counts(items: object) -> dict[tuple[str, str], int]:
+    counts: dict[tuple[str, str], int] = {}
+    for item in items:
+        key = (item.object_type, item.object_stable_id)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _module_row(
+    step: Step,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.STEP, step.path_step)
+    evidence_ids = {
+        technique.evidence_id for technique in step.techniques.all() if technique.evidence_id
+    }
+    return {
+        "id": step.path_step,
+        "name": step.surface or f"Module {step.path_step}",
+        "tier": step.tier,
+        "objective": step.objective,
+        "minutes": step.estimated_minutes,
+        "techniqueCount": step.techniques.count(),
+        "evidenceCount": len(evidence_ids),
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _technique_row(
+    technique: Technique,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.TECHNIQUE, technique.technique_id)
+    return {
+        "id": technique.technique_id,
+        "name": technique.name,
+        "module": technique.step.path_step if technique.step else "",
+        "tactics": [tactic.name for tactic in technique.tactics.all()],
+        "evidence": technique.evidence.evidence_id if technique.evidence else "",
+        "plannedAction": technique.planned_action,
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _evidence_row(
+    evidence: Evidence,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.EVIDENCE, evidence.evidence_id)
+    return {
+        "id": evidence.evidence_id,
+        "description": evidence.description,
+        "techniqueCount": evidence.techniques.count(),
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }

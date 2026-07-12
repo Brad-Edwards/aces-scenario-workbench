@@ -11,6 +11,8 @@ urlpatterns = [
     path("", views.landing, name="landing"),
     path("healthz", views.healthz, name="healthz"),
     path("privacy/", views.privacy, name="privacy"),
+    path("app/", views.spa_app, name="spa-app"),
+    path("app/<path:path>", views.spa_app, name="spa-app-deep"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("projects/<slug:slug>/", views.project_detail, name="project-detail"),
     path("projects/<slug:slug>/activity/", views.project_activity, name="project-activity"),
@@ -22,6 +24,14 @@ urlpatterns = [
     path(_OBJ + "comment", collab.post_comment, name="object-comment"),
     path(_OBJ + "review-state", collab.set_review_state, name="object-review-state"),
     path(_OBJ + "decision", collab.record_decision, name="object-decision"),
+    path("api/app/me", api.current_user, name="api-current-user"),
+    path("api/app/projects", api.project_list, name="api-projects"),
+    path("api/app/projects/<slug:slug>", api.project_detail, name="api-project-detail"),
+    path(
+        "api/app/revisions/<int:revision_pk>",
+        api.revision_workspace,
+        name="api-revision-workspace",
+    ),
     path(
         "api/projects/<slug:slug>/revisions",
         api.upload_revision,
