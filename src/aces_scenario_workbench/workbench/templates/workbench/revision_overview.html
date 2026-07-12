@@ -1,0 +1,150 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}{{ scenario.name }} {{ revision.label }} — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb">
+    <a href="{% url 'dashboard' %}">Projects</a> /
+    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
+    {{ scenario.name }}
+  </p>
+  <h1>{{ scenario.name }}</h1>
+  <p class="subhead">
+    Revision {{ revision.label }}{% if revision.framework_name %} · {{ revision.framework_name }} {{ revision.framework_release }}{% endif %}
+  </p>
+
+  <div class="summary-grid">
+    <div class="summary-item"><b>{{ counts.tactics }}</b><span>Tactics</span></div>
+    <div class="summary-item"><b>{{ counts.techniques }}</b><span>Techniques</span></div>
+    <div class="summary-item"><b>{{ counts.steps }}</b><span>Modules</span></div>
+    <div class="summary-item"><b>{{ counts.evidence }}</b><span>Evidence</span></div>
+  </div>
+
+  <h2 id="techniques">Techniques</h2>
+  <form class="toolbar" method="get" role="search" aria-label="Filter techniques">
+    <div class="field field-search">
+      <label for="q">Search</label>
+      <input id="q" type="search" name="q" value="{{ filters.q }}" placeholder="ID, name, action, evidence">
+    </div>
+    <div class="field">
+      <label for="module-filter">Module</label>
+      <select id="module-filter" name="module">
+        <option value="">All modules</option>
+        {% for step in module_options %}
+          <option value="{{ step.path_step }}" {% if filters.module == step.path_step %}selected{% endif %}>{{ step.path_step }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="tactic-filter">Tactic</label>
+      <select id="tactic-filter" name="tactic">
+        <option value="">All tactics</option>
+        {% for tactic in tactic_options %}
+          <option value="{{ tactic.tactic_id }}" {% if filters.tactic == tactic.tactic_id %}selected{% endif %}>{{ tactic.tactic_id }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="level-filter">Level</label>
+      <select id="level-filter" name="level">
+        <option value="">All levels</option>
+        {% for level in level_options %}
+          <option value="{{ level }}" {% if filters.level == level %}selected{% endif %}>{{ level }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field actions">
+      <button type="submit">Filter</button>
+      {% if has_filters %}
+        <a class="clear" href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}#techniques" title="Clear filters" aria-label="Clear filters">&times;</a>
+      {% endif %}
+    </div>
+  </form>
+  <p class="result-line">
+    <span>Showing {{ match_count }} of {{ counts.techniques }} technique{{ counts.techniques|pluralize }}{% if has_filters %} matching your filters{% endif %}.</span>
+  </p>
+  <div class="table-wrap">
+    <table>
+      <caption>ATLAS techniques projected for this revision.</caption>
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Name</th>
+          <th scope="col">Tactics</th>
+          <th scope="col">Module</th>
+          <th scope="col">Evidence</th>
+          <th scope="col">Coverage</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for technique in techniques %}
+          <tr>
+            <td class="tech-id">
+              <a href="{% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }}</a>
+            </td>
+            <td>{{ technique.name }}</td>
+            <td>
+              {% for tactic in technique.tactics.all %}
+                <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }}</a>
+              {% endfor %}
+            </td>
+            <td>
+              {% if technique.step %}
+                <a href="{% url 'step-detail' project.slug scenario.slug revision.pk technique.step.path_step %}">{{ technique.step.path_step }}</a>
+              {% endif %}
+            </td>
+            <td class="evidence">
+              {% if technique.evidence %}
+                <a href="{% url 'evidence-detail' project.slug scenario.slug revision.pk technique.evidence.evidence_id %}">{{ technique.evidence.evidence_id }}</a>
+              {% endif %}
+            </td>
+            <td>{{ technique.coverage_status }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="empty">No techniques match your filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.paginator.num_pages > 1 %}
+    <nav class="pager" aria-label="Techniques pages">
+      {% if page.has_previous %}
+        <a rel="prev" href="?page={{ page.previous_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}#techniques">Previous</a>
+      {% endif %}
+      <span class="current">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+        <a rel="next" href="?page={{ page.next_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}#techniques">Next</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+
+  <h2>Modules</h2>
+  <div class="module-grid">
+    {% for step in steps %}
+      <article class="module" data-tier="{{ step.tier }}">
+        <div class="module-head">
+          <h3>
+            <a href="{% url 'step-detail' project.slug scenario.slug revision.pk step.path_step %}">Module {{ step.path_step }}</a>
+          </h3>
+          <span class="tier" data-tier="{{ step.tier }}">{{ step.tier }}</span>
+        </div>
+        <p class="module-objective">{{ step.objective }}</p>
+        <dl class="facts">
+          <dt>Surface</dt><dd>{{ step.surface }}</dd>
+          {% if step.estimated_minutes %}<dt>Estimated minutes</dt><dd>{{ step.estimated_minutes }}</dd>{% endif %}
+        </dl>
+      </article>
+    {% empty %}
+      <p class="empty">No modules in this revision.</p>
+    {% endfor %}
+  </div>
+
+  <h2>Tactics</h2>
+  <ul class="card-list">
+    {% for tactic in tactics %}
+      <li>
+        <a href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }} — {{ tactic.name }}</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock %}

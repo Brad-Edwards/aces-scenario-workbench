@@ -1,0 +1,10 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Invitation unavailable — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <h1>Invitation unavailable</h1>
+  <p>This invitation has expired or has already been used. Ask an administrator
+  for a new invitation.</p>
+  <p><a href="{% url 'login' %}">Sign in</a></p>
+{% endblock %}

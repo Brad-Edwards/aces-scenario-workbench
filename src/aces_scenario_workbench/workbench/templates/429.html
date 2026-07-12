@@ -1,0 +1,10 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Too many requests — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <h1>Too many requests</h1>
+  <p>You have made too many attempts in a short time. Please wait a little while
+  and try again.</p>
+  <p><a href="{% url 'login' %}">Back to sign in</a></p>
+{% endblock %}

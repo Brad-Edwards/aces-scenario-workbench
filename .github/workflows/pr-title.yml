@@ -1,0 +1,46 @@
+name: PR Title
+
+# Repository-side PR title guard. Enforces the Conventional Commit shape and
+# bans agent/tool advertising prefixes (e.g. `[claude] ...`) on feature PRs.
+# Scoped to PRs whose BASE is `dev`: those titles are squash-merged into the
+# commit that later drives release-please, so the convention matters. `dev`->`main`
+# promotion PRs are exempt — their title is a merge subject, not a release-driving
+# commit.
+#
+# The PR title is untrusted event data: the checker reads it from
+# $GITHUB_EVENT_PATH (never shell-interpolated), the token is read-only, and this
+# uses `pull_request` (never `pull_request_target`). It checks out the BASE ref
+# so a PR cannot weaken its own guard by editing tools/check_pr_title.py.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title-guard:
+    name: PR title guard
+    if: github.event.pull_request.base.ref == 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out base ref (trusted policy copy)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Validate PR title
+        run: |
+          if [ ! -f tools/check_pr_title.py ]; then
+            echo "::notice::tools/check_pr_title.py is not on the base ref yet; skipping (bootstrap for the PR that introduces the guard). Enforcement is active for every subsequent PR."
+            exit 0
+          fi
+          python tools/check_pr_title.py

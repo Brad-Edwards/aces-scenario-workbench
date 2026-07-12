@@ -1,0 +1,17 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Sign in — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <h1>Sign in</h1>
+  {% if form.errors %}
+    <p role="alert">Your email and password did not match. Please try again.</p>
+  {% endif %}
+  <form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit">Sign in</button>
+  </form>
+  <p><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
+{% endblock %}

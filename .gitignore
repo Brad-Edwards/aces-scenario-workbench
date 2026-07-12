@@ -5,3 +5,26 @@ __pycache__/
 .env.*
 node_modules/
 dist/
+build/
+
+# Django / app runtime
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+
+# Test / coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+# Local-only working notes (never committed)
+.local/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# MkDocs build output
+site/

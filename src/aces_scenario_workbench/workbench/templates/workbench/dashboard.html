@@ -1,0 +1,18 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Your projects — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <h1>Your projects</h1>
+  {% if projects %}
+    <ul class="card-list">
+      {% for project in projects %}
+        <li class="panel">
+          <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">You are not a member of any projects yet.</p>
+  {% endif %}
+{% endblock %}

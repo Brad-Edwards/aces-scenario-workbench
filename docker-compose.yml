@@ -1,0 +1,31 @@
+# Local production-like stack: the workbench served by gunicorn against
+# PostgreSQL. For plain local development, `aces-workbench serve` with the
+# default SQLite database is simpler.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: workbench
+      POSTGRES_USER: workbench
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workbench}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    environment:
+      DATABASE_URL: postgres://workbench:${POSTGRES_PASSWORD:-workbench}@db:5432/workbench
+      ACES_WORKBENCH_SECRET_KEY: ${ACES_WORKBENCH_SECRET_KEY:?set a secret key}
+      ACES_WORKBENCH_ALLOWED_HOSTS: ${ACES_WORKBENCH_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      ACES_WORKBENCH_DEBUG: "0"
+      # This stack serves plain HTTP on localhost, so disable the HTTPS controls
+      # that are on by default outside debug. Enable them behind real TLS.
+      ACES_WORKBENCH_SSL_REDIRECT: "0"
+      ACES_WORKBENCH_SECURE_COOKIES: "0"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

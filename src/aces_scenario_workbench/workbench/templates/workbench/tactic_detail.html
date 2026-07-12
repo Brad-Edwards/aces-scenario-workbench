@@ -1,0 +1,28 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}{{ object.tactic_id }} — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb">
+    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
+    <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
+    Tactic
+  </p>
+  <h1>{{ object.tactic_id }}</h1>
+  <p class="subhead">{{ object.name }}</p>
+
+  <section class="panel">
+    <h2>Techniques in this tactic</h2>
+    <ul class="card-list">
+      {% for technique in object.techniques.all %}
+        <li>
+          <a href="{% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
+        </li>
+      {% empty %}
+        <li class="empty">No techniques mapped to this tactic.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% include "workbench/_collab.html" %}
+{% endblock %}

@@ -1,0 +1,10 @@
+You have been invited to join a project on the ACES Scenario Workbench.
+
+Project: {{ invitation.project }}
+Role: {{ invitation.get_role_display }}
+
+To accept the invitation and set your password, open:
+
+{{ link }}
+
+If you did not expect this invitation, you can ignore this message.

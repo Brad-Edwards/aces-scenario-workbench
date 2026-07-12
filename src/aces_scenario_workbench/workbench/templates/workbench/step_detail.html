@@ -1,0 +1,42 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Module {{ object.path_step }} — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb">
+    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
+    <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
+    Module
+  </p>
+  <h1>Module {{ object.path_step }}</h1>
+
+  <section class="panel">
+    <dl class="facts">
+      <dt>Behavior specification</dt><dd>{{ object.behavior_specification|default:"—" }}</dd>
+      <dt>Tier</dt><dd><span class="tier" data-tier="{{ object.tier }}">{{ object.tier|default:"—" }}</span></dd>
+      <dt>Surface</dt><dd>{{ object.surface|default:"—" }}</dd>
+      <dt>Estimated minutes</dt><dd>{{ object.estimated_minutes|default:"—" }}</dd>
+      <dt>Objective</dt><dd>{{ object.objective|default:"—" }}</dd>
+      <dt>Flag outcome</dt><dd>{{ object.flag_outcome|default:"—" }}</dd>
+    </dl>
+  </section>
+
+  {% if object.justification %}
+    <section class="panel"><h2>Justification</h2><p>{{ object.justification }}</p></section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Techniques in this module</h2>
+    <ul class="card-list">
+      {% for technique in object.techniques.all %}
+        <li>
+          <a href="{% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
+        </li>
+      {% empty %}
+        <li class="empty">No techniques mapped to this module.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% include "workbench/_collab.html" %}
+{% endblock %}
