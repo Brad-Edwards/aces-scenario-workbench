@@ -25,3 +25,6 @@ htmlcov/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# MkDocs build output
+site/

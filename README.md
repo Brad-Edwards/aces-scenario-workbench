@@ -36,6 +36,14 @@ export DATABASE_URL=postgres://user:pass@localhost:5432/workbench
 The Django admin (`/admin/`) is available to administrators for creating
 projects and managing membership.
 
+## Documentation
+
+Full documentation is published at
+<https://brad-edwards.github.io/aces-scenario-workbench/>. Start with
+[Prerequisites](docs/prerequisites.md) for what you need in place before
+installing, then [Setup](docs/setup.md), [Access & registration](docs/access-control.md),
+[Deployment](docs/deployment.md), and the [go-live checklist](docs/go-live-checklist.md).
+
 ## Product boundary
 
 - ACES scenario packs remain the authoritative source for scenario content.

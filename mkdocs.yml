@@ -1,0 +1,47 @@
+site_name: ACES Scenario Workbench
+site_description: Collaborative review workbench for ACES scenario packs.
+repo_url: https://github.com/Brad-Edwards/aces-scenario-workbench
+repo_name: Brad-Edwards/aces-scenario-workbench
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Prerequisites: prerequisites.md
+  - Setup: setup.md
+  - Access & registration: access-control.md
+  - Deployment: deployment.md
+  - Go-live checklist: go-live-checklist.md
+  - Product intent: product-intent.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+# ADRs live in the repo for contributors, not in the published site.
+exclude_docs: |
+  decisions/
+
+strict: true
