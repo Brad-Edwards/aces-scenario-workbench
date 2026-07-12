@@ -20,7 +20,7 @@ classifiers = [
     "Topic :: Security",
 ]
 dependencies = [
-    "Django>=5.1,<6",
+    "Django>=5.1,<7",
     "whitenoise>=6.7",
     "dj-database-url>=2.2",
     "django-cache-url>=3.4",
