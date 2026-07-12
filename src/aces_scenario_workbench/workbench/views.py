@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET
@@ -8,6 +12,9 @@ from django.views.decorators.http import require_GET
 from . import access
 from .collab import object_collab_context
 from .models import Evidence, ObjectType, Revision, Step, Tactic, Technique
+
+TECHNIQUES_PER_PAGE = 25
+_TECHNIQUE_FILTERS = ("q", "module", "tactic", "level")
 
 
 @require_GET
@@ -62,20 +69,54 @@ def project_activity(request: HttpRequest, slug: str) -> HttpResponse:
     return render(request, "workbench/activity.html", {"project": project, "events": events})
 
 
+def _filter_techniques(revision: Revision, filters: dict[str, str]) -> QuerySet[Technique]:
+    """Techniques for a revision, narrowed by the search box and dropdown filters."""
+    techniques = (
+        revision.techniques.select_related("step", "evidence")
+        .prefetch_related("tactics")
+        .order_by("technique_id")
+    )
+    if filters["q"]:
+        techniques = techniques.filter(
+            Q(technique_id__icontains=filters["q"])
+            | Q(name__icontains=filters["q"])
+            | Q(planned_action__icontains=filters["q"])
+            | Q(evidence__evidence_id__icontains=filters["q"])
+        )
+    if filters["module"]:
+        techniques = techniques.filter(step__path_step=filters["module"])
+    if filters["tactic"]:
+        techniques = techniques.filter(tactics__tactic_id=filters["tactic"])
+    if filters["level"]:
+        techniques = techniques.filter(step__tier=filters["level"])
+    return techniques.distinct()
+
+
 @login_required
 @require_GET
 def revision_overview(
     request: HttpRequest, project_slug: str, scenario_slug: str, revision_pk: int
 ) -> HttpResponse:
     revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
-    techniques = revision.techniques.select_related("step", "evidence").prefetch_related("tactics")
+    filters = {name: request.GET.get(name, "").strip() for name in _TECHNIQUE_FILTERS}
+    paginator = Paginator(_filter_techniques(revision, filters), TECHNIQUES_PER_PAGE)
+    page = paginator.get_page(request.GET.get("page"))
+    active_filters = {name: value for name, value in filters.items() if value}
     context = {
         "revision": revision,
         "scenario": revision.scenario,
         "project": revision.scenario.project,
         "tactics": revision.tactics.all(),
         "steps": revision.steps.all(),
-        "techniques": techniques,
+        "techniques": page,
+        "page": page,
+        "filters": filters,
+        "filter_query": urlencode(active_filters),
+        "has_filters": bool(active_filters),
+        "match_count": paginator.count,
+        "module_options": revision.steps.all(),
+        "tactic_options": revision.tactics.all(),
+        "level_options": sorted({t for t in revision.steps.values_list("tier", flat=True) if t}),
         "counts": {
             "tactics": revision.tactics.count(),
             "techniques": revision.techniques.count(),
