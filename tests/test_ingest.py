@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -10,6 +12,7 @@ from django.urls import reverse
 
 from aces_scenario_workbench.workbench.ingest import (
     ProjectionError,
+    import_pack,
     import_projection,
     load_projection,
     parse_projection,
@@ -38,6 +41,7 @@ def test_import_creates_revision_graph(scenario):
     assert revision.steps.count() == 2
     assert revision.techniques.count() == 3
     assert revision.evidence.count() == 2
+    assert revision.challenges.count() == 0
 
     technique = revision.techniques.get(technique_id="AML.T0000")
     assert technique.step.path_step == "1"
@@ -52,6 +56,42 @@ def test_import_is_idempotent(scenario):
     assert created2 is False
     assert revision1.pk == revision2.pk
     assert scenario.revisions.count() == 1
+
+
+def test_import_pack_creates_implemented_challenges(scenario):
+    revision, created = import_pack(scenario, SAMPLE.parent)
+    assert created is True
+    assert revision.challenges.count() == 1
+
+    challenge = revision.challenges.get(flag_id="flag-recon")
+    assert challenge.outcome_id == "recon"
+    assert challenge.step.path_step == "1"
+    assert challenge.runtime_entrypoint == "/v1/infer"
+    assert challenge.techniques.count() == 2
+
+    requirement = challenge.evidence_requirements.get(evidence_key="ev-recon")
+    assert requirement.event_kind == "recon_verdict"
+    assert requirement.source_service == "proof-api"
+    assert requirement.freshness_seconds == 3600
+    assert requirement.evidence.description == (
+        "Read-only evidence confirms the reconnaissance behavior occurred."
+    )
+
+
+def test_changed_challenge_contract_creates_new_revision(scenario, tmp_path):
+    pack = tmp_path / "sample-scenario"
+    shutil.copytree(SAMPLE.parent, pack)
+    import_pack(scenario, pack)
+
+    challenge_file = pack / "challenges" / "challenges.yaml"
+    challenge_file.write_text(
+        challenge_file.read_text().replace("Recon Receipt", "Updated Recon Receipt")
+    )
+    revision, created = import_pack(scenario, pack)
+
+    assert created is True
+    assert scenario.revisions.count() == 2
+    assert revision.challenges.get().title == "Updated Recon Receipt"
 
 
 def test_changed_content_creates_new_revision(scenario):

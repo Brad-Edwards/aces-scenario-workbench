@@ -24,6 +24,7 @@ class ObjectType(models.TextChoices):
     STEP = "step", "Step"
     TECHNIQUE = "technique", "Technique"
     EVIDENCE = "evidence", "Evidence"
+    CHALLENGE = "challenge", "Challenge"
 
 
 class ReviewStatus(models.TextChoices):
@@ -195,6 +196,74 @@ class Technique(models.Model):
 
     def __str__(self) -> str:
         return f"{self.technique_id} {self.name}"
+
+
+class Challenge(models.Model):
+    """A concrete participant-facing challenge derived from pack contracts."""
+
+    revision = models.ForeignKey(Revision, on_delete=models.CASCADE, related_name="challenges")
+    step = models.ForeignKey(
+        Step, on_delete=models.SET_NULL, null=True, blank=True, related_name="challenges"
+    )
+    techniques = models.ManyToManyField(Technique, related_name="challenges", blank=True)
+    flag_id = models.CharField(max_length=100)
+    outcome_id = models.CharField(max_length=100)
+    title = models.CharField(max_length=200)
+    question = models.TextField(blank=True)
+    category = models.CharField(max_length=100, blank=True)
+    difficulty = models.CharField(max_length=50, blank=True)
+    points = models.PositiveIntegerField(null=True, blank=True)
+    hints = models.JSONField(default=list, blank=True)
+    implemented = models.BooleanField(default=False)
+    runtime_entrypoint = models.CharField(max_length=200, blank=True)
+    source_path = models.CharField(max_length=300, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["revision", "flag_id"], name="unique_challenge"),
+        ]
+        ordering = ["revision", "flag_id"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class ChallengeEvidenceRequirement(models.Model):
+    """Evidence a challenge requires before its receipt/award should count."""
+
+    challenge = models.ForeignKey(
+        Challenge, on_delete=models.CASCADE, related_name="evidence_requirements"
+    )
+    evidence = models.ForeignKey(
+        Evidence,
+        on_delete=models.CASCADE,
+        related_name="challenge_requirements",
+        null=True,
+        blank=True,
+    )
+    evidence_key = models.CharField(max_length=100)
+    predicate = models.TextField(blank=True)
+    source_path = models.CharField(max_length=300, blank=True)
+    event_id = models.CharField(max_length=100, blank=True)
+    event_kind = models.CharField(max_length=100, blank=True)
+    source_service = models.CharField(max_length=100, blank=True)
+    source_asset = models.CharField(max_length=100, blank=True)
+    freshness_seconds = models.PositiveIntegerField(null=True, blank=True)
+    reset_owner = models.CharField(max_length=100, blank=True)
+    fields = models.JSONField(default=list, blank=True)
+    proof_fields = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["challenge", "evidence_key"], name="unique_challenge_evidence"
+            ),
+        ]
+        ordering = ["challenge", "evidence_key"]
+
+    def __str__(self) -> str:
+        return f"{self.challenge.flag_id} requires {self.evidence_key}"
 
 
 class Comment(TimeStamped):

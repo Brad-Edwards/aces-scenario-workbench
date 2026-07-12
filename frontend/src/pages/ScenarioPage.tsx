@@ -36,6 +36,7 @@ export function ScenarioPage() {
                 <Th className="text-right">Modules</Th>
                 <Th className="text-right">Techniques</Th>
                 <Th className="text-right">Evidence</Th>
+                <Th className="text-right">Challenges</Th>
                 <Th className="text-right">Comments</Th>
                 <Th className="text-right">Decisions</Th>
                 <Th>Imported</Th>
@@ -62,6 +63,7 @@ export function ScenarioPage() {
                   <Td className="text-right font-mono tabular-nums">{revision.moduleCount}</Td>
                   <Td className="text-right font-mono tabular-nums">{revision.techniqueCount}</Td>
                   <Td className="text-right font-mono tabular-nums">{revision.evidenceCount}</Td>
+                  <Td className="text-right font-mono tabular-nums">{revision.challengeCount}</Td>
                   <Td className="text-right font-mono tabular-nums">{revision.commentCount}</Td>
                   <Td className="text-right font-mono tabular-nums">{revision.decisionCount}</Td>
                   <Td className="text-muted-foreground">{formatDate(revision.createdAt)}</Td>

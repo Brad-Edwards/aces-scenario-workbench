@@ -1,4 +1,10 @@
-export type WorkspaceTab = "modules" | "techniques" | "evidence" | "comments" | "decisions";
+export type WorkspaceTab =
+  | "challenges"
+  | "modules"
+  | "techniques"
+  | "evidence"
+  | "comments"
+  | "decisions";
 
 export function revisionPath(revisionId: number | string, tab?: WorkspaceTab) {
   const base = `/app/revisions/${encodeURIComponent(String(revisionId))}`;
@@ -17,6 +23,10 @@ export function evidencePath(revisionId: number | string, evidenceId: string) {
   return `${revisionPath(revisionId)}/evidence/${encodeURIComponent(evidenceId)}`;
 }
 
+export function challengePath(revisionId: number | string, challengeId: string) {
+  return `${revisionPath(revisionId)}/challenges/${encodeURIComponent(challengeId)}`;
+}
+
 export function objectPath(revisionId: number | string, objectType: string, objectId: string) {
   switch (objectType) {
     case "step":
@@ -25,6 +35,8 @@ export function objectPath(revisionId: number | string, objectType: string, obje
       return techniquePath(revisionId, objectId);
     case "evidence":
       return evidencePath(revisionId, objectId);
+    case "challenge":
+      return challengePath(revisionId, objectId);
     case "tactic":
       return revisionPath(revisionId, "techniques");
     default:

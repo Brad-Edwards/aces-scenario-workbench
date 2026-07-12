@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
-from aces_scenario_workbench.workbench.ingest import import_projection, load_projection
+from aces_scenario_workbench.workbench.ingest import import_pack
 from aces_scenario_workbench.workbench.models import (
     Comment,
     Decision,
@@ -19,7 +19,7 @@ from aces_scenario_workbench.workbench.models import (
 )
 
 User = get_user_model()
-SAMPLE = settings.BASE_DIR / "fixtures" / "sample-scenario" / "atlas-technique-projection.yaml"
+SAMPLE = settings.BASE_DIR / "fixtures" / "sample-scenario"
 
 
 @pytest.fixture
@@ -32,8 +32,7 @@ def spa_workspace(db):
     outsider = User.objects.create_user(email="outsider@example.com", password="review-pass-42x")
     Membership.objects.create(scenario=scenario, user=member, role=Role.REVIEWER)
     Membership.objects.create(scenario=other, user=outsider, role=Role.REVIEWER)
-    data, _ = load_projection(SAMPLE)
-    revision, _ = import_projection(scenario, data)
+    revision, _ = import_pack(scenario, SAMPLE)
     Comment.objects.create(
         revision=revision,
         object_type=ObjectType.STEP,
@@ -100,6 +99,7 @@ def test_scenario_detail_returns_table_ready_revisions(client, spa_workspace):
     assert row["moduleCount"] == revision.steps.count()
     assert row["techniqueCount"] == revision.techniques.count()
     assert row["evidenceCount"] == revision.evidence.count()
+    assert row["challengeCount"] == revision.challenges.count()
     assert row["commentCount"] == 1
     assert row["decisionCount"] == 1
     assert "digest" not in json.dumps(payload).lower()
@@ -127,6 +127,12 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert first_technique["relationship"] == "planned_variant"
     assert first_technique["coverageStatus"] == "planned"
     assert first_technique["rationale"] == "A reconnaissance variant satisfied only by ev-recon."
+    assert payload["challenges"][0]["flagId"] == "flag-recon"
+    assert payload["challenges"][0]["outcome"] == "recon"
+    assert payload["challenges"][0]["module"] == "1"
+    assert payload["challenges"][0]["techniqueIds"] == ["AML.T0000", "AML.T0000.000"]
+    assert payload["challenges"][0]["evidenceRequirements"][0]["evidenceId"] == "ev-recon"
+    assert payload["challenges"][0]["evidenceRequirements"][0]["eventKind"] == "recon_verdict"
     assert payload["comments"][0]["body"] == "Needs one check."
     assert payload["comments"][0]["edited"] is False
     assert payload["decisions"][0]["decision"] == "Needs change"

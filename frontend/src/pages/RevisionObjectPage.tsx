@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { getRevision, type RevisionWorkspace } from "@/api/client";
 import { Badge, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 import {
+  challengePath,
   evidencePath,
   modulePath,
   revisionPath,
@@ -12,7 +13,8 @@ import {
   type WorkspaceTab,
 } from "@/lib/workspaceRoutes";
 
-type ObjectKind = "module" | "technique" | "evidence";
+type ObjectKind = "challenge" | "module" | "technique" | "evidence";
+type ChallengeRow = RevisionWorkspace["challenges"][number];
 type ModuleRow = RevisionWorkspace["modules"][number];
 type TechniqueRow = RevisionWorkspace["techniques"][number];
 type EvidenceRow = RevisionWorkspace["evidence"][number];
@@ -30,6 +32,9 @@ export function RevisionObjectPage({ kind }: Readonly<{ kind: ObjectKind }>) {
   if (query.isLoading) return <p className="text-sm text-muted-foreground">Loading object…</p>;
   if (query.isError || !revision) return <p className="text-sm text-destructive">Could not load object.</p>;
 
+  if (kind === "challenge") {
+    return <ChallengeDetail revision={revision} challengeId={decodedObjectId} />;
+  }
   if (kind === "module") {
     return <ModuleDetail revision={revision} moduleId={decodedObjectId} />;
   }
@@ -52,6 +57,7 @@ function ModuleDetail({
   const techniques = revision.techniques.filter((technique) => technique.module === module.id);
   const evidenceIds = new Set(techniques.map((technique) => technique.evidence).filter(Boolean));
   const evidence = revision.evidence.filter((item) => evidenceIds.has(item.id));
+  const challenges = revision.challenges.filter((challenge) => challenge.module === module.id);
 
   return (
     <>
@@ -81,6 +87,7 @@ function ModuleDetail({
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <div className="space-y-6">
+          <RelatedChallengesTable revision={revision} challenges={challenges} title="Challenges in this module" />
           <RelatedTechniquesTable revision={revision} techniques={techniques} title="Techniques in this module" />
           <RelatedEvidenceTable revision={revision} evidence={evidence} title="Evidence referenced by this module" />
         </div>
@@ -102,6 +109,7 @@ function TechniqueDetail({
 
   const module = revision.modules.find((candidate) => candidate.id === technique.module);
   const evidence = revision.evidence.find((candidate) => candidate.id === technique.evidence);
+  const challenges = revision.challenges.filter((challenge) => challenge.techniqueIds.includes(technique.id));
 
   return (
     <>
@@ -157,6 +165,7 @@ function TechniqueDetail({
 
           {module ? <ModuleSummaryCard revision={revision} module={module} /> : null}
           {evidence ? <EvidenceSummaryCard revision={revision} evidence={evidence} /> : null}
+          <RelatedChallengesTable revision={revision} challenges={challenges} title="Related challenges" />
         </div>
         <ActivityPanel revision={revision} objectType="technique" objectId={technique.id} />
       </div>
@@ -175,6 +184,9 @@ function EvidenceDetail({
   if (!evidence) return <MissingObject revision={revision} label="evidence item" />;
 
   const techniques = revision.techniques.filter((technique) => technique.evidence === evidence.id);
+  const challenges = revision.challenges.filter((challenge) =>
+    challenge.evidenceRequirements.some((requirement) => requirement.evidenceId === evidence.id),
+  );
 
   return (
     <>
@@ -196,9 +208,86 @@ function EvidenceDetail({
             </DetailGrid>
             <LongText label="Description" value={evidence.description} />
           </Card>
+          <RelatedChallengesTable revision={revision} challenges={challenges} title="Challenges requiring this evidence" />
           <RelatedTechniquesTable revision={revision} techniques={techniques} title="Techniques using this evidence" />
         </div>
         <ActivityPanel revision={revision} objectType="evidence" objectId={evidence.id} />
+      </div>
+    </>
+  );
+}
+
+function ChallengeDetail({
+  revision,
+  challengeId,
+}: Readonly<{
+  revision: RevisionWorkspace;
+  challengeId: string;
+}>) {
+  const challenge = revision.challenges.find((candidate) => candidate.id === challengeId);
+  if (!challenge) return <MissingObject revision={revision} label="challenge" />;
+
+  const module = revision.modules.find((candidate) => candidate.id === challenge.module);
+  const techniques = revision.techniques.filter((technique) => challenge.techniqueIds.includes(technique.id));
+  const evidence = revision.evidence.filter((item) =>
+    challenge.evidenceRequirements.some((requirement) => requirement.evidenceId === item.id),
+  );
+
+  return (
+    <>
+      <ObjectHeader
+        revision={revision}
+        title={challenge.title}
+        description={`${challenge.flagId} / ${revision.label}`}
+        backTab="challenges"
+      />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+        <div className="space-y-6">
+          <Card className="p-6">
+            <DetailGrid>
+              <DetailItem label="Flag ID" value={challenge.flagId} mono />
+              <DetailItem label="Outcome" value={challenge.outcome} mono />
+              <DetailItem label="Category" value={challenge.category || "—"} />
+              <DetailItem label="Difficulty">
+                {challenge.difficulty ? <Badge>{challenge.difficulty}</Badge> : "—"}
+              </DetailItem>
+              <DetailItem label="Points" value={challenge.points ?? "—"} />
+              <DetailItem label="Runtime">
+                {challenge.implemented ? <Badge>Implemented</Badge> : <Badge>Planned</Badge>}
+              </DetailItem>
+              <DetailItem label="Entrypoint" value={challenge.runtimeEntrypoint || "—"} mono />
+              <DetailItem label="Module">
+                {module ? (
+                  <Link to={modulePath(revision.id, module.id)} className="hover:underline">
+                    {module.name || `Module ${module.id}`}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </DetailItem>
+              <DetailItem label="Attack path" value={challenge.sourcePath || "—"} />
+            </DetailGrid>
+            <LongText label="Question" value={challenge.question} />
+            <section className="mb-5 last:mb-0">
+              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Hints</h2>
+              {challenge.hints.length ? (
+                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {challenge.hints.map((hint) => (
+                    <li key={hint}>{hint}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </section>
+          </Card>
+
+          <EvidenceRequirementsTable revision={revision} challenge={challenge} />
+          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Related TTPs" />
+          <RelatedEvidenceTable revision={revision} evidence={evidence} title="Required evidence objects" />
+        </div>
+        <ActivityPanel revision={revision} objectType="challenge" objectId={challenge.id} />
       </div>
     </>
   );
@@ -282,6 +371,104 @@ function EvidenceSummaryCard({
         {evidence.id}
       </Link>
       <p className="mt-2 text-sm text-muted-foreground">{evidence.description || "No description captured."}</p>
+    </Card>
+  );
+}
+
+function RelatedChallengesTable({
+  revision,
+  challenges,
+  title,
+}: Readonly<{
+  revision: RevisionWorkspace;
+  challenges: ChallengeRow[];
+  title: string;
+}>) {
+  return (
+    <Card className="overflow-hidden py-0">
+      <div className="border-b border-border px-3 py-3 text-sm font-medium">{title}</div>
+      {challenges.length === 0 ? (
+        <EmptyState title="No challenges" body="No implemented challenges are linked here." />
+      ) : (
+        <Table>
+          <thead>
+            <tr className="border-b border-border">
+              <Th>Challenge</Th>
+              <Th>Outcome</Th>
+              <Th className="text-right">Evidence</Th>
+              <Th className="text-right">TTPs</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {challenges.map((challenge) => (
+              <ClickableRow
+                key={challenge.id}
+                to={challengePath(revision.id, challenge.id)}
+                aria-label={`Open challenge ${challenge.title}`}
+              >
+                <Td className="font-medium">{challenge.title}</Td>
+                <Td className="font-mono text-muted-foreground">{challenge.outcome}</Td>
+                <Td className="text-right font-mono tabular-nums">{challenge.evidenceRequirements.length}</Td>
+                <Td className="text-right font-mono tabular-nums">{challenge.techniqueIds.length}</Td>
+              </ClickableRow>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Card>
+  );
+}
+
+function EvidenceRequirementsTable({
+  revision,
+  challenge,
+}: Readonly<{
+  revision: RevisionWorkspace;
+  challenge: ChallengeRow;
+}>) {
+  return (
+    <Card className="overflow-hidden py-0">
+      <div className="border-b border-border px-3 py-3 text-sm font-medium">Evidence requirements</div>
+      {challenge.evidenceRequirements.length === 0 ? (
+        <EmptyState title="No evidence requirements" body="No evidence contract is linked to this challenge." />
+      ) : (
+        <Table>
+          <thead>
+            <tr className="border-b border-border">
+              <Th>Evidence</Th>
+              <Th>Event</Th>
+              <Th>Source</Th>
+              <Th className="text-right">Freshness</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {challenge.evidenceRequirements.map((requirement) => (
+              <ClickableRow
+                key={requirement.evidenceId}
+                to={evidencePath(revision.id, requirement.evidenceId)}
+                aria-label={`Open evidence ${requirement.evidenceId}`}
+              >
+                <Td className="font-mono font-medium">{requirement.evidenceId}</Td>
+                <Td>
+                  <div className="font-mono">{requirement.eventKind || "—"}</div>
+                  {requirement.predicate ? (
+                    <div className="mt-1 max-w-xl whitespace-normal text-sm text-muted-foreground">
+                      {requirement.predicate}
+                    </div>
+                  ) : null}
+                </Td>
+                <Td className="text-muted-foreground">
+                  <div>{requirement.sourceService || "—"}</div>
+                  <div className="font-mono text-xs">{requirement.sourceAsset || ""}</div>
+                </Td>
+                <Td className="text-right font-mono tabular-nums">
+                  {requirement.freshnessSeconds == null ? "—" : `${requirement.freshnessSeconds}s`}
+                </Td>
+              </ClickableRow>
+            ))}
+          </tbody>
+        </Table>
+      )}
     </Card>
   );
 }

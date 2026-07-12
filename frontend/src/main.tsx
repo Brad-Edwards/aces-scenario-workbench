@@ -29,6 +29,10 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/app/" element={<ScenariosPage />} />
             <Route path="/app/scenarios/:slug" element={<ScenarioPage />} />
             <Route path="/app/revisions/:id" element={<RevisionPage />} />
+            <Route
+              path="/app/revisions/:id/challenges/:objectId"
+              element={<RevisionObjectPage kind="challenge" />}
+            />
             <Route path="/app/revisions/:id/modules/:objectId" element={<RevisionObjectPage kind="module" />} />
             <Route
               path="/app/revisions/:id/techniques/:objectId"

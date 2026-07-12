@@ -3,11 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getRevision, type RevisionWorkspace } from "@/api/client";
 import { Badge, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
-import { evidencePath, modulePath, objectPath, techniquePath } from "@/lib/workspaceRoutes";
+import { challengePath, evidencePath, modulePath, objectPath, techniquePath } from "@/lib/workspaceRoutes";
 
-type TabKey = "modules" | "techniques" | "evidence" | "comments" | "decisions";
+type TabKey = "challenges" | "modules" | "techniques" | "evidence" | "comments" | "decisions";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: "challenges", label: "Challenges" },
   { key: "modules", label: "Modules" },
   { key: "techniques", label: "Techniques" },
   { key: "evidence", label: "Evidence" },
@@ -53,6 +54,7 @@ export function RevisionPage() {
         ))}
       </div>
 
+      {active === "challenges" ? <ChallengesTable revision={revision} /> : null}
       {active === "modules" ? <ModulesTable revision={revision} /> : null}
       {active === "techniques" ? <TechniquesTable revision={revision} /> : null}
       {active === "evidence" ? <EvidenceTable revision={revision} /> : null}
@@ -64,7 +66,70 @@ export function RevisionPage() {
 
 function tabFromHash(hash: string): TabKey {
   const value = hash.replace("#", "");
-  return TABS.some((tab) => tab.key === value) ? (value as TabKey) : "modules";
+  return TABS.some((tab) => tab.key === value) ? (value as TabKey) : "challenges";
+}
+
+function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
+  return (
+    <Card className="overflow-hidden py-0">
+      {revision.challenges.length === 0 ? (
+        <EmptyState
+          title="No implemented challenges"
+          body="This revision does not include implemented challenge contracts."
+        />
+      ) : (
+        <Table>
+          <thead>
+            <tr className="border-b border-border">
+              <Th>Challenge</Th>
+              <Th>Module</Th>
+              <Th>Difficulty</Th>
+              <Th>Evidence</Th>
+              <Th className="text-right">TTPs</Th>
+              <Th className="text-right">Points</Th>
+              <Th className="text-right">Comments</Th>
+              <Th className="text-right">Decisions</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {revision.challenges.map((challenge) => (
+              <ClickableRow
+                key={challenge.id}
+                to={challengePath(revision.id, challenge.id)}
+                aria-label={`Open challenge ${challenge.title}`}
+              >
+                <Td className="font-medium">
+                  <Link to={challengePath(revision.id, challenge.id)} className="hover:underline">
+                    {challenge.title}
+                  </Link>
+                  <div className="mt-1 font-mono text-xs font-normal text-muted-foreground">{challenge.flagId}</div>
+                </Td>
+                <Td>
+                  {challenge.module ? (
+                    <Link to={modulePath(revision.id, challenge.module)} className="font-mono hover:underline">
+                      {challenge.module}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </Td>
+                <Td>{challenge.difficulty ? <Badge>{challenge.difficulty}</Badge> : "—"}</Td>
+                <Td className="font-mono text-muted-foreground">
+                  {challenge.evidenceRequirements.length
+                    ? challenge.evidenceRequirements.map((item) => item.evidenceId).join(", ")
+                    : "—"}
+                </Td>
+                <Td className="text-right font-mono tabular-nums">{challenge.techniqueIds.length}</Td>
+                <Td className="text-right font-mono tabular-nums">{challenge.points ?? "—"}</Td>
+                <Td className="text-right font-mono tabular-nums">{challenge.commentCount}</Td>
+                <Td className="text-right font-mono tabular-nums">{challenge.decisionCount}</Td>
+              </ClickableRow>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Card>
+  );
 }
 
 function ModulesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {

@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.utils.text import slugify
 
-from ...ingest import ProjectionError, import_projection, load_projection
+from ...ingest import ProjectionError, import_pack
 from ...models import Membership, Role, Scenario
 
 
@@ -42,13 +42,11 @@ class Command(BaseCommand):
         if not slug:
             raise CommandError("Could not infer a scenario slug; pass --slug.")
 
+        scenario, scenario_created = self._sync_scenario(slug, options)
         try:
-            data, _ = load_projection(source_path)
+            revision, revision_created = import_pack(scenario, source_path)
         except ProjectionError as exc:
             raise CommandError(str(exc)) from exc
-
-        scenario, scenario_created = self._sync_scenario(slug, options)
-        revision, revision_created = import_projection(scenario, data)
         membership_result = self._grant_user(scenario, options)
 
         if scenario_created:
@@ -62,6 +60,7 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(f"Already up to date (revision {revision.pk}).")
+        self.stdout.write(f"Synced {revision.challenges.count()} implemented challenge(s).")
 
         if membership_result == "created":
             self.stdout.write("Granted scenario access.")

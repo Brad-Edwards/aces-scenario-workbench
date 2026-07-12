@@ -9,6 +9,7 @@ back into a pack.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 from pathlib import Path
@@ -17,12 +18,27 @@ from typing import Any
 import yaml
 from django.db import transaction
 
-from .models import Evidence, Revision, Scenario, Step, Tactic, Technique
+from .models import (
+    Challenge,
+    ChallengeEvidenceRequirement,
+    Evidence,
+    Revision,
+    Scenario,
+    Step,
+    Tactic,
+    Technique,
+)
 
 PROJECTION_CANDIDATES = (
     "atlas-technique-projection.yaml",
     "oracle/atlas-technique-projection.yaml",
 )
+CONTRACT_PATHS = {
+    "challenges": "challenges/challenges.yaml",
+    "placement": "flags/placement.yaml",
+    "objectives": "oracle/objectives.yaml",
+    "telemetry": "oracle/telemetry.yaml",
+}
 
 
 class ProjectionError(ValueError):
@@ -44,6 +60,10 @@ def _entries(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
     return value if isinstance(value, list) else []
 
 
+def _string_list(value: object) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
 def load_projection(path: Path) -> tuple[dict[str, Any], bytes]:
     """Load a projection from a file, or from a pack directory."""
     if path.is_dir():
@@ -53,6 +73,23 @@ def load_projection(path: Path) -> tuple[dict[str, Any], bytes]:
     except OSError as exc:
         raise ProjectionError(str(exc)) from exc
     return parse_projection(raw), raw
+
+
+def load_pack_contracts(path: Path) -> dict[str, Any]:
+    """Load optional challenge/scoring/evidence contracts from a pack directory."""
+    if not path.is_dir():
+        return {}
+
+    contracts: dict[str, Any] = {}
+    for key, relative_path in CONTRACT_PATHS.items():
+        found = path / relative_path
+        if found.is_file():
+            contracts[key] = parse_projection(found.read_bytes())
+
+    runtime = _runtime_challenges(path)
+    if runtime:
+        contracts["runtime_challenges"] = runtime
+    return contracts
 
 
 def parse_projection(raw: bytes) -> dict[str, Any]:
@@ -78,12 +115,34 @@ def _digest(data: dict[str, Any]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _content_digest(projection: dict[str, Any], contracts: dict[str, Any]) -> str:
+    if not contracts:
+        return _digest(projection)
+    return _digest({"projection": projection, "contracts": contracts})
+
+
 @transaction.atomic
 def import_projection(scenario: Scenario, data: dict[str, Any]) -> tuple[Revision, bool]:
     """Import a projection into ``scenario``; returns ``(revision, created)``."""
+    return _import_revision(scenario, data, {}, _content_digest(data, {}))
+
+
+def import_pack(scenario: Scenario, path: Path) -> tuple[Revision, bool]:
+    """Import a full pack directory when available, including challenge contracts."""
+    data, _ = load_projection(path)
+    contracts = load_pack_contracts(path)
+    return _import_revision(scenario, data, contracts, _content_digest(data, contracts))
+
+
+@transaction.atomic
+def _import_revision(
+    scenario: Scenario,
+    data: dict[str, Any],
+    contracts: dict[str, Any],
+    digest: str,
+) -> tuple[Revision, bool]:
     framework = _mapping(data, "framework")
 
-    digest = _digest(data)
     existing = Revision.objects.filter(scenario=scenario, content_digest=digest).first()
     if existing is not None:
         return existing, False
@@ -99,10 +158,24 @@ def import_projection(scenario: Scenario, data: dict[str, Any]) -> tuple[Revisio
         metadata={
             "experience_contract": _mapping(data, "experience_contract"),
             "semantic_binding": _mapping(data, "semantic_binding"),
+            "challenge_contracts": _contract_metadata(contracts),
         },
     )
     _load_objects(revision, data)
+    _load_challenges(revision, contracts)
     return revision, True
+
+
+def _contract_metadata(contracts: dict[str, Any]) -> dict[str, Any]:
+    if not contracts:
+        return {}
+    return {
+        "has_challenges": bool(contracts.get("challenges")),
+        "has_placement": bool(contracts.get("placement")),
+        "has_objectives": bool(contracts.get("objectives")),
+        "has_telemetry": bool(contracts.get("telemetry")),
+        "implemented_outcomes": sorted(contracts.get("runtime_challenges", {})),
+    }
 
 
 def _load_tactics(revision: Revision, data: dict[str, Any]) -> dict[str, Tactic]:
@@ -187,3 +260,208 @@ def _load_objects(revision: Revision, data: dict[str, Any]) -> None:
             evidence_ids.add(evidence_id)
     evidence = _load_evidence(revision, evidence_ids)
     _load_techniques(revision, data, tactics, steps, evidence)
+
+
+def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
+    if not contracts:
+        return
+
+    challenges = {
+        _text(row, "flag_id"): row
+        for row in _entries(contracts.get("challenges", {}), "challenges")
+    }
+    placements = _entries(contracts.get("placement", {}), "flags")
+    outcomes = {
+        _text(row, "id"): row for row in _entries(contracts.get("objectives", {}), "outcomes")
+    }
+    path_steps = {
+        _text(row, "id"): row for row in _entries(contracts.get("objectives", {}), "path_steps")
+    }
+    telemetry = {
+        _text(row, "evidence"): row for row in _entries(contracts.get("telemetry", {}), "events")
+    }
+    runtime = contracts.get("runtime_challenges", {})
+    if not isinstance(runtime, dict) or not runtime:
+        return
+
+    steps = {step.path_step: step for step in revision.steps.all()}
+    techniques_by_step: dict[str, list[Technique]] = {}
+    for technique in revision.techniques.select_related("step").all():
+        if technique.step_id:
+            techniques_by_step.setdefault(technique.step.path_step, []).append(technique)
+
+    for placement in placements:
+        outcome_id = _text(placement, "outcome")
+        runtime_row = runtime.get(outcome_id)
+        challenge_row = challenges.get(_text(placement, "flag_id"))
+        outcome = outcomes.get(outcome_id)
+        if not isinstance(runtime_row, dict) or not challenge_row or not outcome:
+            continue
+
+        canonical_steps = _string_list(outcome.get("canonical_steps"))
+        step = steps.get(canonical_steps[0]) if canonical_steps else None
+        path_step_contract = path_steps.get(step.path_step) if step else {}
+        source_path = _first_evidence_source(path_step_contract)
+        challenge = Challenge.objects.create(
+            revision=revision,
+            step=step,
+            flag_id=_text(placement, "flag_id"),
+            outcome_id=outcome_id,
+            title=_text(challenge_row, "title"),
+            question=_text(challenge_row, "question"),
+            category=_text(challenge_row, "category"),
+            difficulty=_text(challenge_row, "difficulty"),
+            points=_int_or_none(challenge_row.get("points")),
+            hints=_string_list(challenge_row.get("hints")),
+            implemented=True,
+            runtime_entrypoint=_text(runtime_row, "entrypoint"),
+            source_path=source_path,
+            metadata={
+                "delivery": _mapping(placement, "delivery"),
+                "profiles": _string_list(placement.get("profiles")),
+            },
+        )
+        if step:
+            challenge.techniques.set(techniques_by_step.get(step.path_step, []))
+        _load_challenge_evidence(
+            challenge,
+            revision,
+            outcome,
+            placement,
+            path_step_contract if isinstance(path_step_contract, dict) else {},
+            telemetry,
+        )
+
+
+def _load_challenge_evidence(
+    challenge: Challenge,
+    revision: Revision,
+    outcome: dict[str, Any],
+    placement: dict[str, Any],
+    path_step_contract: dict[str, Any],
+    telemetry: dict[str, dict[str, Any]],
+) -> None:
+    evidence_ids = _string_list(outcome.get("required_evidence"))
+    placement_evidence = _text(placement, "evidence")
+    if placement_evidence and placement_evidence not in evidence_ids:
+        evidence_ids.append(placement_evidence)
+    path_step_evidence = _evidence_contracts(path_step_contract)
+
+    for evidence_id in evidence_ids:
+        event = telemetry.get(evidence_id, {})
+        evidence_contract = path_step_evidence.get(evidence_id, {})
+        evidence, _ = Evidence.objects.get_or_create(revision=revision, evidence_id=evidence_id)
+        predicate = _text(evidence_contract, "predicate")
+        if predicate and not evidence.description:
+            evidence.description = predicate
+            evidence.save(update_fields=["description"])
+        ChallengeEvidenceRequirement.objects.create(
+            challenge=challenge,
+            evidence=evidence,
+            evidence_key=evidence_id,
+            predicate=predicate,
+            source_path=_text(evidence_contract, "source"),
+            event_id=_text(event, "id"),
+            event_kind=_text(event, "event_kind"),
+            source_service=_text(event, "source_service"),
+            source_asset=_text(event, "source_asset"),
+            freshness_seconds=_int_or_none(event.get("freshness_seconds")),
+            reset_owner=_text(event, "reset_owner"),
+            fields=_string_list(event.get("fields")),
+            proof_fields=_string_list(evidence_contract.get("proof_fields")),
+        )
+
+
+def _evidence_contracts(path_step_contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    contracts: dict[str, dict[str, Any]] = {}
+    for row in _entries(path_step_contract, "required_evidence"):
+        evidence_id = _text(row, "id")
+        if evidence_id:
+            contracts[evidence_id] = row
+    return contracts
+
+
+def _first_evidence_source(path_step_contract: dict[str, Any]) -> str:
+    for row in _entries(path_step_contract, "required_evidence"):
+        source = _text(row, "source")
+        if source:
+            return source
+    return ""
+
+
+def _int_or_none(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _runtime_challenges(pack_dir: Path) -> dict[str, dict[str, Any]]:
+    for path in _runtime_candidates(pack_dir):
+        try:
+            parsed = ast.parse(path.read_text())
+        except (OSError, SyntaxError):
+            continue
+        rows = _extract_runtime_rows(parsed)
+        if rows:
+            return rows
+    return {}
+
+
+def _runtime_candidates(pack_dir: Path) -> list[Path]:
+    return sorted((pack_dir / "assets/services").glob("*-runtime/app.py"))
+
+
+def _extract_runtime_rows(parsed: ast.Module) -> dict[str, dict[str, Any]]:
+    constants = _module_string_constants(parsed)
+    for node in parsed.body:
+        if isinstance(node, ast.Assign) and _assigned_to(node, "QUICK_CHALLENGES"):
+            try:
+                value = _literal_with_constants(node.value, constants)
+            except ValueError:
+                return {}
+            if isinstance(value, (list, tuple)):
+                rows = {}
+                for item in value:
+                    if isinstance(item, dict):
+                        outcome_id = item.get("id")
+                        if isinstance(outcome_id, str) and outcome_id:
+                            rows[outcome_id] = {
+                                "title": str(item.get("title") or ""),
+                                "entrypoint": str(item.get("entrypoint") or ""),
+                            }
+                return rows
+    return {}
+
+
+def _module_string_constants(parsed: ast.Module) -> dict[str, str]:
+    constants = {}
+    for node in parsed.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.value, ast.Constant)
+        ):
+            target = node.targets[0]
+            if isinstance(target, ast.Name) and isinstance(node.value.value, str):
+                constants[target.id] = node.value.value
+    return constants
+
+
+def _assigned_to(node: ast.Assign, name: str) -> bool:
+    return any(isinstance(target, ast.Name) and target.id == name for target in node.targets)
+
+
+def _literal_with_constants(node: ast.AST, constants: dict[str, str]) -> object:
+    if isinstance(node, ast.Name) and node.id in constants:
+        return constants[node.id]
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Tuple):
+        return tuple(_literal_with_constants(item, constants) for item in node.elts)
+    if isinstance(node, ast.List):
+        return [_literal_with_constants(item, constants) for item in node.elts]
+    if isinstance(node, ast.Dict):
+        return {
+            _literal_with_constants(key, constants): _literal_with_constants(value, constants)
+            for key, value in zip(node.keys, node.values, strict=True)
+            if key is not None
+        }
+    raise ValueError("unsupported literal")

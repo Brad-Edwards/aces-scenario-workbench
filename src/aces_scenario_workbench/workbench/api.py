@@ -10,7 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import authz
 from .ingest import ProjectionError, import_projection, parse_projection
-from .models import Evidence, ObjectType, Revision, Role, Scenario, Step, Technique
+from .models import Challenge, Evidence, ObjectType, Revision, Role, Scenario, Step, Technique
 
 _ALLOWED_ROLES = {Role.AUTHOR, Role.ADMINISTRATOR}
 
@@ -87,6 +87,7 @@ def scenario_detail(request: HttpRequest, slug: str) -> JsonResponse:
             "revisions__steps",
             "revisions__techniques",
             "revisions__evidence",
+            "revisions__challenges",
             "revisions__comments",
             "revisions__decisions",
         ),
@@ -114,6 +115,11 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
             "techniques__evidence",
             "evidence",
             "evidence__techniques",
+            "challenges",
+            "challenges__step",
+            "challenges__techniques",
+            "challenges__evidence_requirements",
+            "challenges__evidence_requirements__evidence",
             "comments",
             "comments__author",
             "decisions",
@@ -145,6 +151,10 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
             "evidence": [
                 _evidence_row(evidence, comment_counts, decision_counts)
                 for evidence in revision.evidence.all()
+            ],
+            "challenges": [
+                _challenge_row(challenge, comment_counts, decision_counts)
+                for challenge in revision.challenges.all()
             ],
             "comments": [
                 {
@@ -201,6 +211,7 @@ def _revision_row(revision: Revision) -> dict[str, object]:
         "moduleCount": revision.steps.count(),
         "techniqueCount": revision.techniques.count(),
         "evidenceCount": revision.evidence.count(),
+        "challengeCount": revision.challenges.count(),
         "commentCount": revision.comments.count(),
         "decisionCount": revision.decisions.count(),
     }
@@ -275,6 +286,47 @@ def _evidence_row(
         "id": evidence.evidence_id,
         "description": evidence.description,
         "techniqueCount": evidence.techniques.count(),
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _challenge_row(
+    challenge: Challenge,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.CHALLENGE, challenge.flag_id)
+    return {
+        "id": challenge.flag_id,
+        "flagId": challenge.flag_id,
+        "outcome": challenge.outcome_id,
+        "title": challenge.title,
+        "question": challenge.question,
+        "category": challenge.category,
+        "difficulty": challenge.difficulty,
+        "points": challenge.points,
+        "hints": challenge.hints,
+        "implemented": challenge.implemented,
+        "runtimeEntrypoint": challenge.runtime_entrypoint,
+        "sourcePath": challenge.source_path,
+        "module": challenge.step.path_step if challenge.step else "",
+        "moduleName": challenge.step.surface if challenge.step else "",
+        "techniqueIds": [technique.technique_id for technique in challenge.techniques.all()],
+        "evidenceRequirements": [
+            {
+                "evidenceId": requirement.evidence_key,
+                "predicate": requirement.predicate,
+                "sourcePath": requirement.source_path,
+                "eventId": requirement.event_id,
+                "eventKind": requirement.event_kind,
+                "sourceService": requirement.source_service,
+                "sourceAsset": requirement.source_asset,
+                "freshnessSeconds": requirement.freshness_seconds,
+                "resetOwner": requirement.reset_owner,
+            }
+            for requirement in challenge.evidence_requirements.all()
+        ],
         "commentCount": comment_counts.get(key, 0),
         "decisionCount": decision_counts.get(key, 0),
     }

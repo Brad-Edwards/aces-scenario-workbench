@@ -103,7 +103,9 @@ Administrators create scenarios and invite members from the Django admin
 For local dogfooding against an actively developed pack, use `sync`. It creates
 the scenario row when needed, updates explicit scenario metadata, imports the
 current projection as a digest-addressed immutable revision, and does not write
-back into the pack:
+back into the pack. When challenge, flag placement, objective, telemetry, and
+runtime challenge contracts are present, `sync` also imports implemented
+challenges and their evidence requirements into the revision:
 
 ```bash
 aces-workbench sync <pack-path> --slug <slug> --name "Display Name" \

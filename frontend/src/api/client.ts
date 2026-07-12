@@ -27,6 +27,7 @@ export type ScenarioDetail = {
     evidenceCount: number;
     commentCount: number;
     decisionCount: number;
+    challengeCount: number;
   }>;
 };
 
@@ -68,6 +69,36 @@ export type RevisionWorkspace = {
     id: string;
     description: string;
     techniqueCount: number;
+    commentCount: number;
+    decisionCount: number;
+  }>;
+  challenges: Array<{
+    id: string;
+    flagId: string;
+    outcome: string;
+    title: string;
+    question: string;
+    category: string;
+    difficulty: string;
+    points: number | null;
+    hints: string[];
+    implemented: boolean;
+    runtimeEntrypoint: string;
+    sourcePath: string;
+    module: string;
+    moduleName: string;
+    techniqueIds: string[];
+    evidenceRequirements: Array<{
+      evidenceId: string;
+      predicate: string;
+      sourcePath: string;
+      eventId: string;
+      eventKind: string;
+      sourceService: string;
+      sourceAsset: string;
+      freshnessSeconds: number | null;
+      resetOwner: string;
+    }>;
     commentCount: number;
     decisionCount: number;
   }>;

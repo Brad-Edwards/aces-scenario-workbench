@@ -1,0 +1,26 @@
+schema_version: 1
+oracle_id: sample-scenario-oracle
+scenario: {pack: sample-scenario, version: test}
+path_steps:
+  - id: "1"
+    title: Reconnaissance behavior
+    success_state: S-RECON
+    prerequisites: []
+    classification: quick
+    required_evidence:
+      - id: ev-recon
+        predicate: Read-only evidence confirms the reconnaissance behavior occurred.
+        source: docs/attack-path.md#module-1
+        proof_fields: [actor_role, asset_id, event_kind, outcome_id, range_instance, participant, timestamp, status, digest]
+    optional_evidence: []
+    failure_states: []
+outcomes:
+  - id: recon
+    title: Reconnaissance behavior completed
+    required: false
+    success_state: S-RECON
+    canonical_steps: ["1"]
+    required_evidence: [ev-recon]
+    optional_evidence: []
+    failure_states: []
+    awards: [{consumer: native, adapter: native:recon, points: 100}]

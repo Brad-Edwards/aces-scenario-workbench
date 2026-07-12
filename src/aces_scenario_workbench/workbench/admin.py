@@ -4,6 +4,8 @@ from django.contrib import admin
 
 from .models import (
     ActivityEvent,
+    Challenge,
+    ChallengeEvidenceRequirement,
     Comment,
     Decision,
     Evidence,
@@ -69,6 +71,33 @@ class TechniqueAdmin(admin.ModelAdmin):
     list_filter = ("coverage_status", "surface")
     search_fields = ("technique_id", "name")
     filter_horizontal = ("tactics",)
+
+
+class ChallengeEvidenceInline(admin.TabularInline):
+    model = ChallengeEvidenceRequirement
+    extra = 0
+    autocomplete_fields = ("evidence",)
+
+
+@admin.register(Challenge)
+class ChallengeAdmin(admin.ModelAdmin):
+    list_display = ("flag_id", "title", "outcome_id", "step", "difficulty", "points", "implemented")
+    list_filter = ("implemented", "difficulty", "category")
+    search_fields = ("flag_id", "title", "outcome_id")
+    filter_horizontal = ("techniques",)
+    inlines = (ChallengeEvidenceInline,)
+
+
+@admin.register(ChallengeEvidenceRequirement)
+class ChallengeEvidenceRequirementAdmin(admin.ModelAdmin):
+    list_display = (
+        "evidence_key",
+        "challenge",
+        "event_kind",
+        "source_service",
+        "freshness_seconds",
+    )
+    search_fields = ("evidence_key", "event_kind", "source_service", "source_asset")
 
 
 @admin.register(Comment)
