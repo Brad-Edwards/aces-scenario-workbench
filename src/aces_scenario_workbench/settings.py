@@ -13,6 +13,7 @@ from pathlib import Path
 import dj_database_url
 import django_cache_url
 from csp.constants import NONCE, SELF
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management.utils import get_random_secret_key
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -28,6 +29,20 @@ def _env_int(name: str, default: int) -> int:
 
 def _env_list(name: str, default: str) -> list[str]:
     return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
+
+
+def _env_relative_path(name: str, default: str) -> str:
+    value = os.environ.get(name, default).strip().strip("/")
+    if (
+        not value
+        or value.startswith(("http:", "https:"))
+        or "\\" in value
+        or "?" in value
+        or "#" in value
+        or any(part in {"", ".", ".."} for part in value.split("/"))
+    ):
+        raise ImproperlyConfigured(f"{name} must be a relative URL path such as 'control'.")
+    return f"{value}/"
 
 
 # A stable key must be provided in any non-local deployment; the random fallback
@@ -141,6 +156,8 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "landing"
 
+ADMIN_PATH = _env_relative_path("ACES_WORKBENCH_ADMIN_PATH", "control")
+
 # Email. The console backend (prints messages) is the default so local use needs
 # no mail server; set the SMTP host to deliver for real. Credentials are read
 # from the environment, never source.
@@ -191,7 +208,7 @@ RATELIMIT_VIEW = "aces_scenario_workbench.workbench.views.ratelimited"
 # unsafe-inline. The Django admin ships inline scripts it does not nonce, so it is
 # excluded from the policy — keep the admin access-restricted in any deployment.
 CONTENT_SECURITY_POLICY = {
-    "EXCLUDE_URL_PREFIXES": ("/admin/",),
+    "EXCLUDE_URL_PREFIXES": (f"/{ADMIN_PATH}",),
     "DIRECTIVES": {
         "default-src": [SELF],
         "script-src": [SELF, NONCE],

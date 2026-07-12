@@ -7,12 +7,16 @@
   {% if projects %}
     <ul class="card-list">
       {% for project in projects %}
-        <li class="panel">
+        <li class="panel project-card">
           <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a>
+          {% if project.description %}<p>{{ project.description }}</p>{% endif %}
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p class="empty">You are not a member of any projects yet.</p>
+    <section class="empty empty-action">
+      <h2>No projects yet</h2>
+      <p>You are not a member of any projects yet. Ask a workspace administrator for an invitation.</p>
+    </section>
   {% endif %}
 {% endblock %}

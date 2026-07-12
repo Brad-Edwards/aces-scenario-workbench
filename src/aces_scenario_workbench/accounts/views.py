@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods
 from django_ratelimit.decorators import ratelimit
 
 from .forms import AcceptInvitationForm
@@ -113,9 +113,14 @@ def account_export(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
-@require_POST
+@require_http_methods(["GET", "POST"])
 def account_delete(request: HttpRequest) -> HttpResponse:
-    """Delete the signed-in user's account and personal content (GDPR erasure)."""
+    """Confirm and delete the signed-in user's account and personal content."""
+    if request.method == "GET":
+        return render(request, "accounts/account_confirm_delete.html")
+    if request.POST.get("confirm_email", "").strip().lower() != request.user.email.lower():
+        messages.error(request, "Enter your email address to confirm account deletion.")
+        return render(request, "accounts/account_confirm_delete.html", status=400)
     user = request.user
     logout(request)
     user.delete()

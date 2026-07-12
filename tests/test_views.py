@@ -14,3 +14,5 @@ def test_landing_renders():
     response = Client().get(reverse("landing"))
     assert response.status_code == 200
     assert b"ACES Scenario Workbench" in response.content
+    assert reverse("login").encode() in response.content
+    assert b"Administration" not in response.content

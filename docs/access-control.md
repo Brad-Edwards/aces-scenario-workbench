@@ -14,7 +14,8 @@ existence in exactly two ways, both driven by an administrator:
 
 ## Inviting someone
 
-In the Django admin (`/admin/`):
+In the Django admin (`/control/` by default, unless `ACES_WORKBENCH_ADMIN_PATH`
+is set):
 
 1. Go to **Invitations → Add**.
 2. Enter the person's **email**, the **project**, and their **role**.

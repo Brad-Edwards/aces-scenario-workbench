@@ -1,0 +1,31 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Delete account — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb"><a href="{% url 'account' %}">Account</a> / Delete account</p>
+  <section class="panel readable danger-zone">
+    <h1>Delete your account</h1>
+    <p>
+      This permanently removes your account and the comments and decisions you
+      authored. Activity records remain for audit history with your identity
+      removed. This action cannot be undone.
+    </p>
+    {% if messages %}
+      <div class="error-summary" role="alert">
+        {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+      </div>
+    {% endif %}
+    <form method="post" action="{% url 'account-delete' %}" class="stacked-form">
+      {% csrf_token %}
+      <div class="field">
+        <label for="confirm-email">Type your email address to confirm</label>
+        <input id="confirm-email" name="confirm_email" type="email" autocomplete="email" required>
+      </div>
+      <div class="button-row">
+        <button type="submit" class="button-danger">Delete my account</button>
+        <a class="button-secondary" href="{% url 'account' %}">Cancel</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}
