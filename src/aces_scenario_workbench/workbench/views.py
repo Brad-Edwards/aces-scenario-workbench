@@ -29,7 +29,11 @@ def privacy(request: HttpRequest) -> HttpResponse:
 
 
 def ratelimited(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
-    """Response for a request that exceeded a rate limit (RATELIMIT_VIEW target)."""
+    """Response for a request that exceeded a rate limit.
+
+    Registered as ``RATELIMIT_VIEW``; django-ratelimit passes the raised
+    ``exception`` positionally, so it is part of this view's contract.
+    """
     return render(request, "429.html", status=429)
 
 
