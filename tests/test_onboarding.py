@@ -119,6 +119,17 @@ def test_login_page_has_forgot_link(client):
 
 
 @pytest.mark.django_db
+def test_password_reset_uses_app_templates_not_admin(client):
+    # Regression: django.contrib.admin ships registration/password_reset_*.html
+    # and is earlier in INSTALLED_APPS, so app templates must be app-namespaced.
+    response = client.get(reverse("password_reset"))
+    assert response.status_code == 200
+    rendered = {t.name for t in response.templates if t.name}
+    assert "accounts/password_reset_form.html" in rendered
+    assert "workbench/base.html" in rendered
+
+
+@pytest.mark.django_db
 def test_password_reset_sends_email(client):
     User.objects.create_user(email="member@example.com", password="review-pass-1")
     response = client.post(reverse("password_reset"), {"email": "member@example.com"})
