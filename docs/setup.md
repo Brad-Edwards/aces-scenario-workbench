@@ -7,7 +7,7 @@ A full walkthrough from install to a working, multi-user review workspace.
 Once released, from PyPI:
 
 ```bash
-pip install aces-scenario-workbench     # or: uv tool install aces-scenario-workbench
+pip install aces-workbench     # or: uv tool install aces-workbench
 ```
 
 Before the first release, from a source checkout:
@@ -17,7 +17,7 @@ pip install .        # or: uv tool install .
 ```
 
 Requires Python 3.12+. SQLite needs nothing else; PostgreSQL needs the
-`aces-scenario-workbench[postgres]` extra.
+`aces-workbench[postgres]` extra.
 
 ## 2. First run
 

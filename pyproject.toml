@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "aces-scenario-workbench"
+name = "aces-workbench"
 version = "0.0.0"
 description = "Collaborative review workbench for ACES scenario packs."
 readme = "README.md"

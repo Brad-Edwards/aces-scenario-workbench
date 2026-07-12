@@ -4,7 +4,7 @@
   "packages": {
     ".": {
       "release-type": "python",
-      "package-name": "aces-scenario-workbench"
+      "package-name": "aces-workbench"
     }
   }
 }
