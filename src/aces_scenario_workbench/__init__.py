@@ -2,9 +2,13 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-try:
-    # The version lives in pyproject.toml ([project].version), bumped by
-    # release-please; __version__ derives from the installed package metadata.
-    __version__ = version("aces-scenario-workbench")
-except PackageNotFoundError:  # pragma: no cover - only when running uninstalled
-    __version__ = "0.0.0"
+
+def _package_version() -> str:
+    """Version from installed metadata (pyproject [project].version, bumped by release-please)."""
+    try:
+        return version("aces-scenario-workbench")
+    except PackageNotFoundError:
+        return "0.0.0"
+
+
+__version__ = _package_version()
