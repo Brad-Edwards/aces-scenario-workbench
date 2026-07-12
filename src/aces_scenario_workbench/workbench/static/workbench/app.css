@@ -207,7 +207,7 @@ button:hover, .button-primary:hover, .button-secondary:hover, .button-danger:hov
   cursor: pointer;
   font-weight: 700;
 }
-.tab[aria-selected="true"] {
+.tab[aria-pressed="true"] {
   color: var(--ink);
   border-color: var(--accent);
 }

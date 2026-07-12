@@ -60,7 +60,7 @@
     const selectView = (requested) => {
       const selected = names.has(requested) ? requested : "overview";
       tabs.forEach((tab) => {
-        tab.setAttribute("aria-selected", String(tab.dataset.view === selected));
+        tab.setAttribute("aria-pressed", String(tab.dataset.view === selected));
       });
       views.forEach((view) => {
         view.hidden = view.id !== `view-${selected}`;
