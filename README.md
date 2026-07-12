@@ -114,7 +114,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the developer workflow.
 
 Run from a single container against PostgreSQL, or locally against SQLite. See
 [`docs/deployment.md`](docs/deployment.md) for local Docker Compose and an AWS
-(ca-central-1) path.
+example.
 
 ## Privacy
 

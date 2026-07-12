@@ -78,5 +78,5 @@ Password reset is available from the sign-in page ("Forgot your password?").
 
 ## 6. Hosting
 
-See [`deployment.md`](deployment.md) for container and AWS (ca-central-1)
-deployment, including the HTTPS-related environment variables.
+See [`deployment.md`](deployment.md) for container and AWS deployment, including
+the HTTPS-related environment variables.

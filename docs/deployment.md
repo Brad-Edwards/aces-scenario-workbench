@@ -70,31 +70,32 @@ scripts it does not nonce — keep `/admin/` restricted to administrators. The
 in-memory rate-limit cache is per worker; set `ACES_WORKBENCH_CACHE_URL` to a
 shared cache so limits hold across processes.
 
-## AWS (ca-central-1)
+## AWS (example)
 
-The image is deployable to AWS in the Canada Central region using the
-`catalyst-dev` profile. One container-based path:
+The image runs on any container host. One AWS path is below; use your own AWS
+profile and a region of your choice (shown as `<region>`).
 
 1. Build and push the image to ECR:
 
    ```bash
-   aws --profile catalyst-dev --region ca-central-1 ecr create-repository \
+   aws --profile <your-profile> --region <region> ecr create-repository \
      --repository-name aces-workbench
    docker build -t aces-workbench .
    # tag and push to the ECR repository URI from the previous command
    ```
 
-2. Provision a PostgreSQL database (RDS for PostgreSQL) in `ca-central-1` and
+2. Provision a PostgreSQL database (RDS for PostgreSQL) in the same region and
    note its connection string.
 
-3. Run the image on a container service in `ca-central-1` (for example AWS App
-   Runner or ECS Fargate), setting `DATABASE_URL`, `ACES_WORKBENCH_SECRET_KEY`,
+3. Run the image on a container service (for example AWS App Runner or ECS
+   Fargate), setting `DATABASE_URL`, `ACES_WORKBENCH_SECRET_KEY`,
    `ACES_WORKBENCH_ALLOWED_HOSTS`, `ACES_WORKBENCH_SECURE_COOKIES=1`, and
    `ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS`.
 
-4. To serve under `keplerops.com/scenarios`, route that path prefix to the
-   service (for example a CloudFront behavior or an ALB path rule) and include
-   the public origin in `ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS`.
+4. To serve on your own domain or under a path prefix (for example
+   `scenarios.example.com` or `example.com/scenarios`), route that host or prefix
+   to the service (for example a CloudFront behavior or an ALB path rule) and
+   include the public origin in `ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS`.
 
 Store `ACES_WORKBENCH_SECRET_KEY` and database credentials in a secrets manager,
 not in source control.
