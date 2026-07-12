@@ -26,6 +26,23 @@ The web container applies migrations on start and serves with gunicorn on
 docker compose exec web aces-workbench createadmin
 ```
 
+## Container image
+
+Each release publishes an image to the GitHub Container Registry, tagged with the
+version and `latest`:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e ACES_WORKBENCH_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')" \
+  -e DATABASE_URL="postgres://user:pass@host:5432/workbench" \
+  ghcr.io/brad-edwards/aces-workbench:latest
+```
+
+The container applies migrations on start and serves with gunicorn. It runs with
+the HTTPS controls on (debug off); terminate TLS in front of it and forward
+`X-Forwarded-Proto`, or set `ACES_WORKBENCH_SSL_REDIRECT=0` when serving plain
+HTTP behind another layer.
+
 ## Configuration
 
 Set these in the container/host environment for a hosted deployment:
