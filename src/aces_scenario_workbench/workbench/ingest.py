@@ -38,6 +38,11 @@ CONTRACT_PATHS = {
     "placement": "flags/placement.yaml",
     "objectives": "oracle/objectives.yaml",
     "telemetry": "oracle/telemetry.yaml",
+    "scoring": "oracle/scoring.yaml",
+    "topology": "design/topology.yaml",
+    "software_inventory": "design/software-inventory.yaml",
+    "planned_assets": "assets/planned-assets.yaml",
+    "affordances": "assets/affordances.yaml",
 }
 
 
@@ -86,10 +91,21 @@ def load_pack_contracts(path: Path) -> dict[str, Any]:
         if found.is_file():
             contracts[key] = parse_projection(found.read_bytes())
 
+    sdl = _load_sdl(path)
+    if sdl:
+        contracts["sdl"] = sdl
+
     runtime = _runtime_challenges(path)
     if runtime:
         contracts["runtime_challenges"] = runtime
     return contracts
+
+
+def _load_sdl(pack_dir: Path) -> dict[str, Any]:
+    for found in sorted((pack_dir / "sdl").glob("*.sdl.yaml")):
+        if found.is_file():
+            return parse_projection(found.read_bytes())
+    return {}
 
 
 def parse_projection(raw: bytes) -> dict[str, Any]:
@@ -159,6 +175,10 @@ def _import_revision(
             "experience_contract": _mapping(data, "experience_contract"),
             "semantic_binding": _mapping(data, "semantic_binding"),
             "challenge_contracts": _contract_metadata(contracts),
+            "scoring": _scoring_metadata(contracts.get("scoring", {})),
+            "environment": _environment_metadata(contracts),
+            "schedule": _schedule_metadata(data, contracts),
+            "telemetry": _telemetry_metadata(contracts.get("telemetry", {})),
         },
     )
     _load_objects(revision, data)
@@ -174,8 +194,246 @@ def _contract_metadata(contracts: dict[str, Any]) -> dict[str, Any]:
         "has_placement": bool(contracts.get("placement")),
         "has_objectives": bool(contracts.get("objectives")),
         "has_telemetry": bool(contracts.get("telemetry")),
+        "has_scoring": bool(contracts.get("scoring")),
+        "has_topology": bool(contracts.get("topology")),
+        "has_software_inventory": bool(contracts.get("software_inventory")),
+        "has_planned_assets": bool(contracts.get("planned_assets")),
+        "has_affordances": bool(contracts.get("affordances")),
+        "has_sdl": bool(contracts.get("sdl")),
         "implemented_outcomes": sorted(contracts.get("runtime_challenges", {})),
     }
+
+
+def _scoring_metadata(scoring: object) -> dict[str, Any]:
+    scoring = scoring if isinstance(scoring, dict) else {}
+    return {
+        "mode": _text(scoring, "mode"),
+        "max_points": _int_or_none(scoring.get("max_points")),
+        "awards": [_award_row(row) for row in _entries(scoring, "awards")],
+        "alternate_awards": [_award_row(row) for row in _entries(scoring, "alternate_awards")],
+        "bundles": [_bundle_row(row) for row in _entries(scoring, "bundles")],
+    }
+
+
+def _award_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _award_id(row),
+        "points": _int_or_none(row.get("points")),
+        "evidence": _string_list(row.get("evidence")),
+        "required_outcomes": _string_list(row.get("required_outcomes")),
+        "description": _text(row, "description"),
+    }
+
+
+def _bundle_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id") or _text(row, "bundle_id"),
+        "title": _text(row, "title") or _text(row, "name"),
+        "description": _text(row, "description"),
+        "outcomes": _string_list(row.get("outcomes")) or _string_list(row.get("required_outcomes")),
+        "points": _int_or_none(row.get("points")),
+    }
+
+
+def _environment_metadata(contracts: dict[str, Any]) -> dict[str, Any]:
+    topology = contracts.get("topology", {})
+    topology = topology if isinstance(topology, dict) else {}
+    inventory = contracts.get("software_inventory", {})
+    inventory = inventory if isinstance(inventory, dict) else {}
+    planned_assets = contracts.get("planned_assets", {})
+    planned_assets = planned_assets if isinstance(planned_assets, dict) else {}
+    affordances = contracts.get("affordances", {})
+    affordances = affordances if isinstance(affordances, dict) else {}
+    sdl = contracts.get("sdl", {})
+    sdl = sdl if isinstance(sdl, dict) else {}
+
+    return {
+        "assets": [_asset_row(row) for row in _entries(topology, "assets")],
+        "services": [_service_row(row) for row in _entries(topology, "services")],
+        "applications": [_application_row(row) for row in _entries(topology, "applications")],
+        "datasets": [_dataset_row(row) for row in _entries(topology, "datasets")],
+        "artifacts": [_artifact_row(row) for row in _entries(topology, "artifacts")],
+        "path_objectives": [
+            _path_objective_row(row) for row in _entries(topology, "path_objectives")
+        ],
+        "validation_flows": [
+            _validation_flow_row(row) for row in _entries(topology, "validation_flows")
+        ],
+        "software_components": [
+            _software_component_row(row) for row in _entries(inventory, "components")
+        ],
+        "planned_assets": [
+            _planned_asset_row(row) for row in _entries(planned_assets, "asset_sets")
+        ],
+        "affordances": [_affordance_row(row) for row in _entries(affordances, "affordances")],
+        "sdl_behavior_specs": _sdl_behavior_rows(_mapping(sdl, "behavior-specifications")),
+        "counts": {
+            "profiles": _mapping_count(topology.get("profiles")),
+            "zones": len(_entries(topology, "zones")),
+            "networks": len(_entries(topology, "networks")),
+            "assets": len(_entries(topology, "assets")),
+            "services": len(_entries(topology, "services")),
+            "applications": len(_entries(topology, "applications")),
+            "datasets": len(_entries(topology, "datasets")),
+            "artifacts": len(_entries(topology, "artifacts")),
+            "path_objectives": len(_entries(topology, "path_objectives")),
+        },
+    }
+
+
+def _schedule_metadata(data: dict[str, Any], contracts: dict[str, Any]) -> dict[str, Any]:
+    steps = _entries(data, "steps")
+    return {
+        "total_minutes": sum(
+            value
+            for value in (_int_or_none(row.get("estimated_minutes")) for row in steps)
+            if value
+        ),
+        "module_count": len(steps),
+        "outcome_count": len(_entries(contracts.get("objectives", {}), "outcomes")),
+    }
+
+
+def _telemetry_metadata(telemetry: object) -> dict[str, Any]:
+    telemetry = telemetry if isinstance(telemetry, dict) else {}
+    return {
+        "sink_service": _text(telemetry, "sink_service"),
+        "safe_fields": _string_list(telemetry.get("safe_fields")),
+        "forbidden_fields": _string_list(telemetry.get("forbidden_fields")),
+        "negative_gates": [_generic_id_row(row) for row in _entries(telemetry, "negative_gates")],
+    }
+
+
+def _asset_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "hostname": _text(row, "hostname"),
+        "asset_type": _text(row, "asset_type"),
+        "role": _text(row, "role"),
+        "zone": _text(row, "zone"),
+        "networks": _string_list(row.get("networks")),
+        "software_component": _text(row, "software_component"),
+        "visibility": _text(row, "visibility"),
+        "reset_owner": _text(row, "reset_owner"),
+        "implementation_status": _text(row, "implementation_status"),
+        "description": _text(row, "description"),
+    }
+
+
+def _service_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "asset": _text(row, "asset"),
+        "ports": [str(port) for port in _sequence(row, "ports")],
+        "software_component": _text(row, "software_component"),
+        "visibility": _text(row, "visibility"),
+        "reset_owner": _text(row, "reset_owner"),
+        "description": _text(row, "description"),
+    }
+
+
+def _application_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "asset": _text(row, "asset"),
+        "app_type": _text(row, "app_type"),
+        "software_component": _text(row, "software_component"),
+        "auth_service": _text(row, "auth_service"),
+        "visibility": _text(row, "visibility"),
+        "reset_owner": _text(row, "reset_owner"),
+        "description": _text(row, "description"),
+    }
+
+
+def _dataset_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "kind": _text(row, "kind"),
+        "locations": _string_list(row.get("locations")),
+        "synthetic": bool(row.get("synthetic")),
+        "visibility": _text(row, "visibility"),
+        "reset_owner": _text(row, "reset_owner"),
+        "proof": _mapping(row, "proof"),
+        "description": _text(row, "description"),
+    }
+
+
+def _artifact_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "kind": _text(row, "kind"),
+        "asset": _text(row, "asset"),
+        "visibility": _text(row, "visibility"),
+        "reset_owner": _text(row, "reset_owner"),
+        "secret_handling": _text(row, "secret_handling"),
+        "description": _text(row, "description"),
+    }
+
+
+def _path_objective_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "title": _text(row, "title"),
+        "success_states": _string_list(row.get("success_states")),
+        "build_targets": _string_list(row.get("build_targets")),
+        "test_targets": _string_list(row.get("test_targets")),
+        "walkthrough_targets": _string_list(row.get("walkthrough_targets")),
+    }
+
+
+def _validation_flow_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "command": _text(row, "command"),
+        "covers": _string_list(row.get("covers")),
+    }
+
+
+def _software_component_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "component_id") or _text(row, "id"),
+        "topology_refs": _string_list(row.get("topology_refs")),
+        "upstream": _text(row, "upstream"),
+        "operating_mode": _text(row, "operating_mode"),
+        "profiles": _string_list(row.get("profiles")),
+        "authenticity": _text(row, "authenticity"),
+        "path_critical": bool(row.get("path_critical")),
+    }
+
+
+def _planned_asset_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "asset_id") or _text(row, "id"),
+        "category": _text(row, "category"),
+        "implementation_status": _text(row, "implementation_status"),
+        "paths": _string_list(row.get("paths")),
+        "visibility": _text(row, "visibility"),
+        "source_refs": _string_list(row.get("source_refs")),
+        "topology_refs": _string_list(row.get("topology_refs")),
+        "implementation_plan": _text(row, "implementation_plan"),
+    }
+
+
+def _affordance_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": _text(row, "id"),
+        "title": _text(row, "title") or _text(row, "name"),
+        "type": _text(row, "type") or _text(row, "kind"),
+        "asset": _text(row, "asset"),
+        "description": _text(row, "description"),
+    }
+
+
+def _sdl_behavior_rows(rows: dict[str, Any]) -> list[dict[str, Any]]:
+    return [{"id": key, "title": _text(value, "title")} for key, value in sorted(rows.items())]
+
+
+def _generic_id_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {"id": _text(row, "id"), "description": _text(row, "description")}
+
+
+def _mapping_count(value: object) -> int:
+    return len(value) if isinstance(value, dict) else 0
 
 
 def _load_tactics(revision: Revision, data: dict[str, Any]) -> dict[str, Tactic]:
@@ -280,9 +538,16 @@ def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
     telemetry = {
         _text(row, "evidence"): row for row in _entries(contracts.get("telemetry", {}), "events")
     }
+    scoring = contracts.get("scoring", {})
+    awards = {
+        _award_id(row): row
+        for row in _entries(scoring if isinstance(scoring, dict) else {}, "awards")
+        if _award_id(row)
+    }
+    alternate_awards = _entries(scoring if isinstance(scoring, dict) else {}, "alternate_awards")
+    bundles = _entries(scoring if isinstance(scoring, dict) else {}, "bundles")
     runtime = contracts.get("runtime_challenges", {})
-    if not isinstance(runtime, dict) or not runtime:
-        return
+    runtime = runtime if isinstance(runtime, dict) else {}
 
     steps = {step.path_step: step for step in revision.steps.all()}
     techniques_by_step: dict[str, list[Technique]] = {}
@@ -296,12 +561,24 @@ def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
         challenge_row = challenges.get(_text(placement, "flag_id"))
         outcome = outcomes.get(outcome_id)
         if not isinstance(runtime_row, dict) or not challenge_row or not outcome:
+            if not challenge_row or not outcome:
+                continue
+            runtime_row = {}
+
+        if not isinstance(runtime_row, dict):
             continue
 
         canonical_steps = _string_list(outcome.get("canonical_steps"))
         step = steps.get(canonical_steps[0]) if canonical_steps else None
-        path_step_contract = path_steps.get(step.path_step) if step else {}
-        source_path = _first_evidence_source(path_step_contract)
+        path_step_contracts = [
+            path_steps.get(path_step_id, {})
+            for path_step_id in canonical_steps
+            if isinstance(path_steps.get(path_step_id, {}), dict)
+        ]
+        source_path = _first_evidence_source(path_step_contracts)
+        award = awards.get(outcome_id, {})
+        evidence_ids = _challenge_evidence_ids(outcome, placement)
+        implemented = bool(runtime_row)
         challenge = Challenge.objects.create(
             revision=revision,
             step=step,
@@ -311,24 +588,51 @@ def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
             question=_text(challenge_row, "question"),
             category=_text(challenge_row, "category"),
             difficulty=_text(challenge_row, "difficulty"),
-            points=_int_or_none(challenge_row.get("points")),
+            points=_int_or_none(challenge_row.get("points"))
+            or _int_or_none(award.get("points") if isinstance(award, dict) else None),
             hints=_string_list(challenge_row.get("hints")),
-            implemented=True,
+            implemented=implemented,
             runtime_entrypoint=_text(runtime_row, "entrypoint"),
             source_path=source_path,
             metadata={
                 "delivery": _mapping(placement, "delivery"),
                 "profiles": _string_list(placement.get("profiles")),
+                "canonical_steps": canonical_steps,
+                "objective": {
+                    "title": _text(outcome, "title"),
+                    "success_state": _text(outcome, "success_state"),
+                },
+                "scoring": _award_row(award) if isinstance(award, dict) else {},
+                "alternate_awards": [
+                    _award_row(row) for row in alternate_awards if _award_id(row) == outcome_id
+                ],
+                "bundles": [
+                    _bundle_row(row) for row in bundles if outcome_id in _bundle_outcomes(row)
+                ],
+                "readiness": {
+                    "challenge_contract": True,
+                    "placement": True,
+                    "objective": True,
+                    "scoring": isinstance(award, dict) and bool(award),
+                    "runtime": implemented,
+                    "telemetry": all(evidence_id in telemetry for evidence_id in evidence_ids),
+                    "evidence_contract": _all_evidence_has_contract(
+                        evidence_ids, path_step_contracts
+                    ),
+                },
             },
         )
-        if step:
-            challenge.techniques.set(techniques_by_step.get(step.path_step, []))
+        linked_techniques = []
+        for path_step_id in canonical_steps:
+            linked_techniques.extend(techniques_by_step.get(path_step_id, []))
+        if linked_techniques:
+            challenge.techniques.set(linked_techniques)
         _load_challenge_evidence(
             challenge,
             revision,
             outcome,
             placement,
-            path_step_contract if isinstance(path_step_contract, dict) else {},
+            path_step_contracts,
             telemetry,
         )
 
@@ -338,14 +642,11 @@ def _load_challenge_evidence(
     revision: Revision,
     outcome: dict[str, Any],
     placement: dict[str, Any],
-    path_step_contract: dict[str, Any],
+    path_step_contracts: list[dict[str, Any]],
     telemetry: dict[str, dict[str, Any]],
 ) -> None:
-    evidence_ids = _string_list(outcome.get("required_evidence"))
-    placement_evidence = _text(placement, "evidence")
-    if placement_evidence and placement_evidence not in evidence_ids:
-        evidence_ids.append(placement_evidence)
-    path_step_evidence = _evidence_contracts(path_step_contract)
+    evidence_ids = _challenge_evidence_ids(outcome, placement)
+    path_step_evidence = _evidence_contracts(path_step_contracts)
 
     for evidence_id in evidence_ids:
         event = telemetry.get(evidence_id, {})
@@ -372,21 +673,46 @@ def _load_challenge_evidence(
         )
 
 
-def _evidence_contracts(path_step_contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _challenge_evidence_ids(outcome: dict[str, Any], placement: dict[str, Any]) -> list[str]:
+    evidence_ids = _string_list(outcome.get("required_evidence"))
+    placement_evidence = _text(placement, "evidence")
+    if placement_evidence and placement_evidence not in evidence_ids:
+        evidence_ids.append(placement_evidence)
+    return evidence_ids
+
+
+def _evidence_contracts(path_step_contracts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     contracts: dict[str, dict[str, Any]] = {}
-    for row in _entries(path_step_contract, "required_evidence"):
-        evidence_id = _text(row, "id")
-        if evidence_id:
-            contracts[evidence_id] = row
+    for path_step_contract in path_step_contracts:
+        for row in _entries(path_step_contract, "required_evidence"):
+            evidence_id = _text(row, "id")
+            if evidence_id:
+                contracts[evidence_id] = row
     return contracts
 
 
-def _first_evidence_source(path_step_contract: dict[str, Any]) -> str:
-    for row in _entries(path_step_contract, "required_evidence"):
-        source = _text(row, "source")
-        if source:
-            return source
+def _all_evidence_has_contract(
+    evidence_ids: list[str], path_step_contracts: list[dict[str, Any]]
+) -> bool:
+    contracts = _evidence_contracts(path_step_contracts)
+    return bool(evidence_ids) and all(evidence_id in contracts for evidence_id in evidence_ids)
+
+
+def _first_evidence_source(path_step_contracts: list[dict[str, Any]]) -> str:
+    for path_step_contract in path_step_contracts:
+        for row in _entries(path_step_contract, "required_evidence"):
+            source = _text(row, "source")
+            if source:
+                return source
     return ""
+
+
+def _award_id(row: dict[str, Any]) -> str:
+    return _text(row, "id") or _text(row, "outcome")
+
+
+def _bundle_outcomes(row: dict[str, Any]) -> list[str]:
+    return _string_list(row.get("outcomes")) or _string_list(row.get("required_outcomes"))
 
 
 def _int_or_none(value: object) -> int | None:

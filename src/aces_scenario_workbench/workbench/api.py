@@ -220,6 +220,11 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
             },
             "framework": _framework_label(revision),
             "createdAt": revision.created_at.isoformat(),
+            "summary": _revision_summary(revision),
+            "schedule": _metadata_dict(revision.metadata, "schedule"),
+            "scoring": _metadata_dict(revision.metadata, "scoring"),
+            "environment": _metadata_dict(revision.metadata, "environment"),
+            "telemetry": _metadata_dict(revision.metadata, "telemetry"),
             "modules": [
                 _module_row(step, comment_counts, decision_counts) for step in revision.steps.all()
             ],
@@ -368,6 +373,28 @@ def _anchor_counts(items: object) -> dict[tuple[str, str], int]:
     return counts
 
 
+def _metadata_dict(metadata: dict[str, object], key: str) -> dict[str, object]:
+    value = metadata.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _revision_summary(revision: Revision) -> dict[str, object]:
+    total_minutes = sum(
+        step.estimated_minutes or 0 for step in revision.steps.all() if step.estimated_minutes
+    )
+    implemented = sum(1 for challenge in revision.challenges.all() if challenge.implemented)
+    challenge_count = revision.challenges.count()
+    return {
+        "totalMinutes": total_minutes,
+        "moduleCount": revision.steps.count(),
+        "techniqueCount": revision.techniques.count(),
+        "evidenceCount": revision.evidence.count(),
+        "challengeCount": challenge_count,
+        "implementedChallengeCount": implemented,
+        "plannedChallengeCount": challenge_count - implemented,
+    }
+
+
 def _module_row(
     step: Step,
     comment_counts: dict[tuple[str, str], int],
@@ -436,6 +463,7 @@ def _challenge_row(
     decision_counts: dict[tuple[str, str], int],
 ) -> dict[str, object]:
     key = (ObjectType.CHALLENGE, challenge.flag_id)
+    metadata = challenge.metadata if isinstance(challenge.metadata, dict) else {}
     return {
         "id": challenge.flag_id,
         "flagId": challenge.flag_id,
@@ -447,11 +475,18 @@ def _challenge_row(
         "points": challenge.points,
         "hints": challenge.hints,
         "implemented": challenge.implemented,
+        "status": "Implemented" if challenge.implemented else "Planned",
         "runtimeEntrypoint": challenge.runtime_entrypoint,
         "sourcePath": challenge.source_path,
         "module": challenge.step.path_step if challenge.step else "",
         "moduleName": challenge.step.surface if challenge.step else "",
         "techniqueIds": [technique.technique_id for technique in challenge.techniques.all()],
+        "canonicalSteps": _string_list(metadata.get("canonical_steps")),
+        "readiness": _object_dict(metadata.get("readiness")),
+        "scoring": _object_dict(metadata.get("scoring")),
+        "alternateAwards": _list_of_dicts(metadata.get("alternate_awards")),
+        "bundles": _list_of_dicts(metadata.get("bundles")),
+        "delivery": _object_dict(metadata.get("delivery")),
         "evidenceRequirements": [
             {
                 "evidenceId": requirement.evidence_key,
@@ -463,9 +498,23 @@ def _challenge_row(
                 "sourceAsset": requirement.source_asset,
                 "freshnessSeconds": requirement.freshness_seconds,
                 "resetOwner": requirement.reset_owner,
+                "fields": requirement.fields,
+                "proofFields": requirement.proof_fields,
             }
             for requirement in challenge.evidence_requirements.all()
         ],
         "commentCount": comment_counts.get(key, 0),
         "decisionCount": decision_counts.get(key, 0),
     }
+
+
+def _object_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_of_dicts(value: object) -> list[dict[str, object]]:
+    return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
+
+
+def _string_list(value: object) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []

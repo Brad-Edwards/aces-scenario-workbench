@@ -14,6 +14,18 @@ path_steps:
         proof_fields: [actor_role, asset_id, event_kind, outcome_id, range_instance, participant, timestamp, status, digest]
     optional_evidence: []
     failure_states: []
+  - id: "2"
+    title: Evasion behavior
+    success_state: S-EVASION
+    prerequisites: []
+    classification: intermediate
+    required_evidence:
+      - id: ev-evasion
+        predicate: Evidence confirms the evasion behavior is contractually planned.
+        source: docs/attack-path.md#module-2
+        proof_fields: [actor_role, asset_id, event_kind, outcome_id, range_instance, participant, timestamp, status, digest]
+    optional_evidence: []
+    failure_states: []
 outcomes:
   - id: recon
     title: Reconnaissance behavior completed
@@ -24,3 +36,12 @@ outcomes:
     optional_evidence: []
     failure_states: []
     awards: [{consumer: native, adapter: native:recon, points: 100}]
+  - id: evasion
+    title: Evasion behavior planned
+    required: false
+    success_state: S-EVASION
+    canonical_steps: ["2"]
+    required_evidence: [ev-evasion]
+    optional_evidence: []
+    failure_states: []
+    awards: [{consumer: native, adapter: native:evasion, points: 150}]

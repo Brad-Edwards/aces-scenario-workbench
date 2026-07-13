@@ -260,15 +260,26 @@ function ChallengeDetail({
             <DetailGrid>
               <DetailItem label="Flag ID" value={challenge.flagId} mono />
               <DetailItem label="Outcome" value={challenge.outcome} mono />
+              <DetailItem label="Status">
+                <Badge className={challenge.implemented ? "" : "bg-muted text-muted-foreground"}>
+                  {challenge.status}
+                </Badge>
+              </DetailItem>
               <DetailItem label="Category" value={challenge.category || "—"} />
               <DetailItem label="Difficulty">
                 {challenge.difficulty ? <Badge>{challenge.difficulty}</Badge> : "—"}
               </DetailItem>
               <DetailItem label="Points" value={challenge.points ?? "—"} />
+              <DetailItem label="Scoring points" value={challenge.scoring.points ?? "—"} />
               <DetailItem label="Runtime">
                 {challenge.implemented ? <Badge>Implemented</Badge> : <Badge>Planned</Badge>}
               </DetailItem>
               <DetailItem label="Entrypoint" value={challenge.runtimeEntrypoint || "—"} mono />
+              <DetailItem
+                label="Canonical steps"
+                value={challenge.canonicalSteps.length ? challenge.canonicalSteps.join(", ") : "—"}
+                mono
+              />
               <DetailItem label="Module">
                 {module ? (
                   <Link to={modulePath(revision.id, module.id)} className="hover:underline">
@@ -281,6 +292,8 @@ function ChallengeDetail({
               <DetailItem label="Attack path" value={challenge.sourcePath || "—"} />
             </DetailGrid>
             <LongText label="Question" value={challenge.question} />
+            <ReadinessChecklist readiness={challenge.readiness} />
+            <LongText label="Delivery" value={formatKeyValueMap(challenge.delivery)} />
             <section className="mb-5 last:mb-0">
               <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Hints</h2>
               {challenge.hints.length ? (
@@ -456,6 +469,7 @@ function EvidenceRequirementsTable({
               <Th>Evidence</Th>
               <Th>Event</Th>
               <Th>Source</Th>
+              <Th>Proof fields</Th>
               <Th className="text-right">Freshness</Th>
             </tr>
           </thead>
@@ -478,6 +492,10 @@ function EvidenceRequirementsTable({
                 <Td className="text-muted-foreground">
                   <div>{requirement.sourceService || "—"}</div>
                   <div className="font-mono text-xs">{requirement.sourceAsset || ""}</div>
+                  <div className="mt-1 font-mono text-xs">{requirement.sourcePath || ""}</div>
+                </Td>
+                <Td className="max-w-[280px] whitespace-normal font-mono text-xs text-muted-foreground">
+                  {requirement.proofFields.length ? requirement.proofFields.join(", ") : "—"}
                 </Td>
                 <Td className="text-right font-mono tabular-nums">
                   {requirement.freshnessSeconds == null ? "—" : `${requirement.freshnessSeconds}s`}
@@ -789,6 +807,33 @@ function LongText({
       <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{value || "—"}</p>
     </section>
   );
+}
+
+function ReadinessChecklist({ readiness }: Readonly<{ readiness: Record<string, boolean> }>) {
+  const entries = Object.entries(readiness);
+  if (entries.length === 0) return null;
+  return (
+    <section className="mb-5 last:mb-0">
+      <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Readiness</h2>
+      <div className="flex flex-wrap gap-2">
+        {entries.map(([key, ready]) => (
+          <Badge key={key} className={ready ? "" : "bg-muted text-muted-foreground"}>
+            {readinessLabel(key)}: {ready ? "yes" : "no"}
+          </Badge>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function readinessLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatKeyValueMap(value: Record<string, string>) {
+  const entries = Object.entries(value).filter(([, entry]) => entry);
+  if (entries.length === 0) return "";
+  return entries.map(([key, entry]) => `${readinessLabel(key)}: ${entry}`).join("\n");
 }
 
 function decodeParam(value: string) {

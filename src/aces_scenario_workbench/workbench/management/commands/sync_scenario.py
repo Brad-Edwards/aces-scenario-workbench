@@ -60,7 +60,12 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(f"Already up to date (revision {revision.pk}).")
-        self.stdout.write(f"Synced {revision.challenges.count()} implemented challenge(s).")
+        implemented = revision.challenges.filter(implemented=True).count()
+        planned = revision.challenges.filter(implemented=False).count()
+        self.stdout.write(
+            f"Synced {revision.challenges.count()} challenge contract(s) "
+            f"({implemented} implemented, {planned} planned)."
+        )
 
         if membership_result == "created":
             self.stdout.write("Granted scenario access.")

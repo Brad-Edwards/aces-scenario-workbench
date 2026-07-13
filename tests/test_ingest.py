@@ -58,16 +58,27 @@ def test_import_is_idempotent(scenario):
     assert scenario.revisions.count() == 1
 
 
-def test_import_pack_creates_implemented_challenges(scenario):
+def test_import_pack_creates_planned_and_implemented_challenges(scenario):
     revision, created = import_pack(scenario, SAMPLE.parent)
     assert created is True
-    assert revision.challenges.count() == 1
+    assert revision.challenges.count() == 2
 
     challenge = revision.challenges.get(flag_id="flag-recon")
     assert challenge.outcome_id == "recon"
     assert challenge.step.path_step == "1"
+    assert challenge.implemented is True
     assert challenge.runtime_entrypoint == "/v1/infer"
     assert challenge.techniques.count() == 2
+    assert challenge.metadata["readiness"] == {
+        "challenge_contract": True,
+        "placement": True,
+        "objective": True,
+        "scoring": True,
+        "runtime": True,
+        "telemetry": True,
+        "evidence_contract": True,
+    }
+    assert challenge.metadata["scoring"]["points"] == 100
 
     requirement = challenge.evidence_requirements.get(evidence_key="ev-recon")
     assert requirement.event_kind == "recon_verdict"
@@ -76,6 +87,21 @@ def test_import_pack_creates_implemented_challenges(scenario):
     assert requirement.evidence.description == (
         "Read-only evidence confirms the reconnaissance behavior occurred."
     )
+
+    planned = revision.challenges.get(flag_id="flag-evasion")
+    assert planned.outcome_id == "evasion"
+    assert planned.step.path_step == "2"
+    assert planned.implemented is False
+    assert planned.runtime_entrypoint == ""
+    assert planned.points == 150
+    assert planned.metadata["readiness"]["runtime"] is False
+    assert planned.metadata["readiness"]["scoring"] is True
+    assert planned.evidence_requirements.get(evidence_key="ev-evasion").event_kind == (
+        "evasion_verdict"
+    )
+    assert revision.metadata["scoring"]["max_points"] == 250
+    assert revision.metadata["environment"]["counts"]["assets"] == 1
+    assert revision.metadata["environment"]["assets"][0]["id"] == "proof-service"
 
 
 def test_changed_challenge_contract_creates_new_revision(scenario, tmp_path):
@@ -91,7 +117,7 @@ def test_changed_challenge_contract_creates_new_revision(scenario, tmp_path):
 
     assert created is True
     assert scenario.revisions.count() == 2
-    assert revision.challenges.get().title == "Updated Recon Receipt"
+    assert revision.challenges.get(flag_id="flag-recon").title == "Updated Recon Receipt"
 
 
 def test_changed_content_creates_new_revision(scenario):

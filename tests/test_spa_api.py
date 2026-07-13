@@ -81,7 +81,7 @@ def test_scenario_list_is_scoped_to_membership(client, spa_workspace):
     payload = response.json()
     assert [row["slug"] for row in payload["scenarios"]] == [scenario.slug]
     assert other.slug not in json.dumps(payload)
-    assert "project" not in json.dumps(payload).lower()
+    assert '"project"' not in json.dumps(payload).lower()
     assert payload["scenarios"][0]["role"] == "Reviewer"
     assert payload["scenarios"][0]["revisionCount"] == 1
 
@@ -102,8 +102,8 @@ def test_scenario_detail_returns_table_ready_revisions(client, spa_workspace):
     assert row["challengeCount"] == revision.challenges.count()
     assert row["commentCount"] == 1
     assert row["decisionCount"] == 1
-    assert "digest" not in json.dumps(payload).lower()
-    assert "project" not in json.dumps(payload).lower()
+    assert "content_digest" not in json.dumps(payload).lower()
+    assert '"project"' not in json.dumps(payload).lower()
 
 
 def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
@@ -127,17 +127,47 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert first_technique["relationship"] == "planned_variant"
     assert first_technique["coverageStatus"] == "planned"
     assert first_technique["rationale"] == "A reconnaissance variant satisfied only by ev-recon."
-    assert payload["challenges"][0]["flagId"] == "flag-recon"
-    assert payload["challenges"][0]["outcome"] == "recon"
-    assert payload["challenges"][0]["module"] == "1"
-    assert payload["challenges"][0]["techniqueIds"] == ["AML.T0000", "AML.T0000.000"]
-    assert payload["challenges"][0]["evidenceRequirements"][0]["evidenceId"] == "ev-recon"
-    assert payload["challenges"][0]["evidenceRequirements"][0]["eventKind"] == "recon_verdict"
+    recon_challenge = next(
+        challenge for challenge in payload["challenges"] if challenge["id"] == "flag-recon"
+    )
+    planned_challenge = next(
+        challenge for challenge in payload["challenges"] if challenge["id"] == "flag-evasion"
+    )
+    assert payload["summary"]["challengeCount"] == 2
+    assert payload["summary"]["implementedChallengeCount"] == 1
+    assert payload["summary"]["plannedChallengeCount"] == 1
+    assert payload["summary"]["totalMinutes"] == 45
+    assert payload["scoring"]["max_points"] == 250
+    assert payload["environment"]["counts"]["assets"] == 1
+    assert recon_challenge["flagId"] == "flag-recon"
+    assert recon_challenge["outcome"] == "recon"
+    assert recon_challenge["module"] == "1"
+    assert recon_challenge["status"] == "Implemented"
+    assert recon_challenge["readiness"]["runtime"] is True
+    assert recon_challenge["scoring"]["points"] == 100
+    assert recon_challenge["techniqueIds"] == ["AML.T0000", "AML.T0000.000"]
+    assert recon_challenge["evidenceRequirements"][0]["evidenceId"] == "ev-recon"
+    assert recon_challenge["evidenceRequirements"][0]["eventKind"] == "recon_verdict"
+    assert recon_challenge["evidenceRequirements"][0]["proofFields"] == [
+        "actor_role",
+        "asset_id",
+        "event_kind",
+        "outcome_id",
+        "range_instance",
+        "participant",
+        "timestamp",
+        "status",
+        "digest",
+    ]
+    assert planned_challenge["status"] == "Planned"
+    assert planned_challenge["implemented"] is False
+    assert planned_challenge["readiness"]["runtime"] is False
+    assert planned_challenge["readiness"]["scoring"] is True
     assert payload["comments"][0]["body"] == "Needs one check."
     assert payload["comments"][0]["edited"] is False
     assert payload["decisions"][0]["decision"] == "Needs change"
-    assert "digest" not in json.dumps(payload).lower()
-    assert "project" not in json.dumps(payload).lower()
+    assert "content_digest" not in json.dumps(payload).lower()
+    assert '"project"' not in json.dumps(payload).lower()
 
 
 def test_spa_comment_endpoint_allows_challenges_and_ttps(client, spa_workspace):

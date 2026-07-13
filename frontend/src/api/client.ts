@@ -37,6 +37,65 @@ export type RevisionWorkspace = {
   scenario: { slug: string; name: string; description: string };
   framework: string;
   createdAt: string;
+  summary: {
+    totalMinutes: number;
+    moduleCount: number;
+    techniqueCount: number;
+    evidenceCount: number;
+    challengeCount: number;
+    implementedChallengeCount: number;
+    plannedChallengeCount: number;
+  };
+  schedule: {
+    total_minutes?: number;
+    module_count?: number;
+    outcome_count?: number;
+  };
+  scoring: {
+    mode?: string;
+    max_points?: number | null;
+    awards?: Array<{
+      id: string;
+      points: number | null;
+      evidence: string[];
+      required_outcomes: string[];
+      description: string;
+    }>;
+    alternate_awards?: Array<{
+      id: string;
+      points: number | null;
+      evidence: string[];
+      required_outcomes: string[];
+      description: string;
+    }>;
+    bundles?: Array<{
+      id: string;
+      title: string;
+      description: string;
+      outcomes: string[];
+      points: number | null;
+    }>;
+  };
+  environment: {
+    counts?: Record<string, number>;
+    assets?: EnvironmentAsset[];
+    services?: EnvironmentService[];
+    applications?: EnvironmentApplication[];
+    datasets?: EnvironmentDataset[];
+    artifacts?: EnvironmentArtifact[];
+    path_objectives?: EnvironmentPathObjective[];
+    validation_flows?: EnvironmentValidationFlow[];
+    software_components?: EnvironmentSoftwareComponent[];
+    planned_assets?: EnvironmentPlannedAsset[];
+    affordances?: EnvironmentAffordance[];
+    sdl_behavior_specs?: Array<{ id: string; title: string }>;
+  };
+  telemetry: {
+    sink_service?: string;
+    safe_fields?: string[];
+    forbidden_fields?: string[];
+    negative_gates?: Array<{ id: string; description: string }>;
+  };
   modules: Array<{
     id: string;
     name: string;
@@ -83,11 +142,36 @@ export type RevisionWorkspace = {
     points: number | null;
     hints: string[];
     implemented: boolean;
+    status: string;
     runtimeEntrypoint: string;
     sourcePath: string;
     module: string;
     moduleName: string;
     techniqueIds: string[];
+    canonicalSteps: string[];
+    readiness: Record<string, boolean>;
+    scoring: {
+      id?: string;
+      points?: number | null;
+      evidence?: string[];
+      required_outcomes?: string[];
+      description?: string;
+    };
+    alternateAwards: Array<{
+      id: string;
+      points: number | null;
+      evidence: string[];
+      required_outcomes: string[];
+      description: string;
+    }>;
+    bundles: Array<{
+      id: string;
+      title: string;
+      description: string;
+      outcomes: string[];
+      points: number | null;
+    }>;
+    delivery: Record<string, string>;
     evidenceRequirements: Array<{
       evidenceId: string;
       predicate: string;
@@ -98,6 +182,8 @@ export type RevisionWorkspace = {
       sourceAsset: string;
       freshnessSeconds: number | null;
       resetOwner: string;
+      fields: string[];
+      proofFields: string[];
     }>;
     commentCount: number;
     decisionCount: number;
@@ -121,6 +207,105 @@ export type RevisionWorkspace = {
     updatedAt: string;
     edited: boolean;
   }>;
+};
+
+export type EnvironmentAsset = {
+  id: string;
+  hostname: string;
+  asset_type: string;
+  role: string;
+  zone: string;
+  networks: string[];
+  software_component: string;
+  visibility: string;
+  reset_owner: string;
+  implementation_status: string;
+  description: string;
+};
+
+export type EnvironmentService = {
+  id: string;
+  asset: string;
+  ports: string[];
+  software_component: string;
+  visibility: string;
+  reset_owner: string;
+  description: string;
+};
+
+export type EnvironmentApplication = {
+  id: string;
+  asset: string;
+  app_type: string;
+  software_component: string;
+  auth_service: string;
+  visibility: string;
+  reset_owner: string;
+  description: string;
+};
+
+export type EnvironmentDataset = {
+  id: string;
+  kind: string;
+  locations: string[];
+  synthetic: boolean;
+  visibility: string;
+  reset_owner: string;
+  description: string;
+};
+
+export type EnvironmentArtifact = {
+  id: string;
+  kind: string;
+  asset: string;
+  visibility: string;
+  reset_owner: string;
+  secret_handling: string;
+  description: string;
+};
+
+export type EnvironmentPathObjective = {
+  id: string;
+  title: string;
+  success_states: string[];
+  build_targets: string[];
+  test_targets: string[];
+  walkthrough_targets: string[];
+};
+
+export type EnvironmentValidationFlow = {
+  id: string;
+  command: string;
+  covers: string[];
+};
+
+export type EnvironmentSoftwareComponent = {
+  id: string;
+  topology_refs: string[];
+  upstream: string;
+  operating_mode: string;
+  profiles: string[];
+  authenticity: string;
+  path_critical: boolean;
+};
+
+export type EnvironmentPlannedAsset = {
+  id: string;
+  category: string;
+  implementation_status: string;
+  paths: string[];
+  visibility: string;
+  source_refs: string[];
+  topology_refs: string[];
+  implementation_plan: string;
+};
+
+export type EnvironmentAffordance = {
+  id: string;
+  title: string;
+  type: string;
+  asset: string;
+  description: string;
 };
 
 export type DecisionValue = "accept" | "needs-change" | "resolve" | "reopen";

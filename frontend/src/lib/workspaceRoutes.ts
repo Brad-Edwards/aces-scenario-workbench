@@ -1,8 +1,11 @@
 export type WorkspaceTab =
   | "challenges"
+  | "schedule"
   | "modules"
   | "techniques"
   | "evidence"
+  | "scoring"
+  | "environment"
   | "comments"
   | "decisions";
 

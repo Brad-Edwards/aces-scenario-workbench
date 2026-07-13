@@ -15,3 +15,15 @@ flags:
       service: proof-api
       affordance: proof-sink
       reset_owner: proof-service
+  - flag_id: flag-evasion
+    outcome: evasion
+    source: instructions
+    instructions: docs/attack-path.md#module-2
+    profiles: [local]
+    evidence: ev-evasion
+    delivery:
+      kind: verdict_response
+      asset: proof-service
+      service: proof-api
+      affordance: proof-sink
+      reset_owner: proof-service
