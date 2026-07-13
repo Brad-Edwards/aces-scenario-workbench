@@ -1,22 +1,22 @@
 {% extends "workbench/base.html" %}
 
-{% block title %}Your projects — ACES Scenario Workbench{% endblock %}
+{% block title %}Your scenarios — ACES Scenario Workbench{% endblock %}
 
 {% block content %}
-  <h1>Your projects</h1>
-  {% if projects %}
+  <h1>Your scenarios</h1>
+  {% if scenarios %}
     <ul class="card-list">
-      {% for project in projects %}
-        <li class="panel project-card">
-          <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a>
-          {% if project.description %}<p>{{ project.description }}</p>{% endif %}
+      {% for scenario in scenarios %}
+        <li class="panel scenario-card">
+          <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a>
+          {% if scenario.description %}<p>{{ scenario.description }}</p>{% endif %}
         </li>
       {% endfor %}
     </ul>
   {% else %}
     <section class="empty empty-action">
-      <h2>No projects yet</h2>
-      <p>You are not a member of any projects yet. Ask a workspace administrator for an invitation.</p>
+      <h2>No scenarios yet</h2>
+      <p>You are not a member of any scenarios yet. Ask a workspace administrator for an invitation.</p>
     </section>
   {% endif %}
 {% endblock %}

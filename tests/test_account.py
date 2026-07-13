@@ -13,8 +13,8 @@ from aces_scenario_workbench.workbench.models import (
     Decision,
     Membership,
     ObjectType,
-    Project,
     Role,
+    Scenario,
 )
 
 User = get_user_model()
@@ -23,13 +23,13 @@ SAMPLE = settings.BASE_DIR / "fixtures" / "sample-scenario" / "atlas-technique-p
 
 @pytest.fixture
 def user_with_data(db):
-    project = Project.objects.create(slug="demo", name="Demo Project")
+    scenario = Scenario.objects.create(slug="demo", name="Demo Scenario")
     user = User.objects.create_user(
         email="member@example.com", password="review-pass-1", display_name="Member One"
     )
-    Membership.objects.create(project=project, user=user, role=Role.REVIEWER)
+    Membership.objects.create(scenario=scenario, user=user, role=Role.REVIEWER)
     data, _ = load_projection(SAMPLE)
-    revision, _ = import_projection(project, data)
+    revision, _ = import_projection(scenario, data)
     anchor = {
         "revision": revision,
         "object_type": ObjectType.TECHNIQUE,
@@ -60,7 +60,7 @@ def test_account_export(client, user_with_data):
     assert response["Content-Disposition"].startswith("attachment")
     payload = json.loads(response.content)
     assert payload["email"] == "member@example.com"
-    assert payload["memberships"][0]["project"] == "demo"
+    assert payload["memberships"][0]["scenario"] == "demo"
     assert payload["comments"][0]["body"] == "A review note."
     assert payload["decisions"][0]["decision"] == "accept"
 

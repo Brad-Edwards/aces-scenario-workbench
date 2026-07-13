@@ -24,6 +24,7 @@ class ObjectType(models.TextChoices):
     STEP = "step", "Step"
     TECHNIQUE = "technique", "Technique"
     EVIDENCE = "evidence", "Evidence"
+    CHALLENGE = "challenge", "Challenge"
 
 
 class ReviewStatus(models.TextChoices):
@@ -48,12 +49,12 @@ class TimeStamped(models.Model):
         abstract = True
 
 
-class Project(TimeStamped):
+class Scenario(TimeStamped):
     slug = models.SlugField(unique=True)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     members = models.ManyToManyField(
-        settings.AUTH_USER_MODEL, through="Membership", related_name="projects"
+        settings.AUTH_USER_MODEL, through="Membership", related_name="scenarios"
     )
 
     class Meta:
@@ -64,7 +65,7 @@ class Project(TimeStamped):
 
 
 class Membership(TimeStamped):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="memberships")
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships"
     )
@@ -72,28 +73,12 @@ class Membership(TimeStamped):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["project", "user"], name="unique_project_member"),
+            models.UniqueConstraint(fields=["scenario", "user"], name="unique_scenario_member"),
         ]
-        ordering = ["project", "user"]
+        ordering = ["scenario", "user"]
 
     def __str__(self) -> str:
-        return f"{self.user} in {self.project} ({self.get_role_display()})"
-
-
-class Scenario(TimeStamped):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="scenarios")
-    slug = models.SlugField()
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["project", "slug"], name="unique_scenario_slug"),
-        ]
-        ordering = ["project", "name"]
-
-    def __str__(self) -> str:
-        return self.name
+        return f"{self.user} in {self.scenario} ({self.get_role_display()})"
 
 
 class Revision(TimeStamped):
@@ -199,8 +184,8 @@ class Technique(models.Model):
 
     @property
     def is_subtechnique(self) -> bool:
-        # ATLAS ids carry an "AML." prefix, so a sub-technique (AML.T0000.000)
-        # is distinguished by a second dot beyond the one in the base id.
+        # Legacy dotted identifiers distinguish sub-items by a second dot beyond
+        # the one in the base id.
         return self.technique_id.count(".") > 1
 
     @property
@@ -211,6 +196,74 @@ class Technique(models.Model):
 
     def __str__(self) -> str:
         return f"{self.technique_id} {self.name}"
+
+
+class Challenge(models.Model):
+    """A concrete participant-facing challenge derived from pack contracts."""
+
+    revision = models.ForeignKey(Revision, on_delete=models.CASCADE, related_name="challenges")
+    step = models.ForeignKey(
+        Step, on_delete=models.SET_NULL, null=True, blank=True, related_name="challenges"
+    )
+    techniques = models.ManyToManyField(Technique, related_name="challenges", blank=True)
+    flag_id = models.CharField(max_length=100)
+    outcome_id = models.CharField(max_length=100)
+    title = models.CharField(max_length=200)
+    question = models.TextField(blank=True)
+    category = models.CharField(max_length=100, blank=True)
+    difficulty = models.CharField(max_length=50, blank=True)
+    points = models.PositiveIntegerField(null=True, blank=True)
+    hints = models.JSONField(default=list, blank=True)
+    implemented = models.BooleanField(default=False)
+    runtime_entrypoint = models.CharField(max_length=200, blank=True)
+    source_path = models.CharField(max_length=300, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["revision", "flag_id"], name="unique_challenge"),
+        ]
+        ordering = ["revision", "flag_id"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class ChallengeEvidenceRequirement(models.Model):
+    """Evidence a challenge requires before its receipt/award should count."""
+
+    challenge = models.ForeignKey(
+        Challenge, on_delete=models.CASCADE, related_name="evidence_requirements"
+    )
+    evidence = models.ForeignKey(
+        Evidence,
+        on_delete=models.CASCADE,
+        related_name="challenge_requirements",
+        null=True,
+        blank=True,
+    )
+    evidence_key = models.CharField(max_length=100)
+    predicate = models.TextField(blank=True)
+    source_path = models.CharField(max_length=300, blank=True)
+    event_id = models.CharField(max_length=100, blank=True)
+    event_kind = models.CharField(max_length=100, blank=True)
+    source_service = models.CharField(max_length=100, blank=True)
+    source_asset = models.CharField(max_length=100, blank=True)
+    freshness_seconds = models.PositiveIntegerField(null=True, blank=True)
+    reset_owner = models.CharField(max_length=100, blank=True)
+    fields = models.JSONField(default=list, blank=True)
+    proof_fields = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["challenge", "evidence_key"], name="unique_challenge_evidence"
+            ),
+        ]
+        ordering = ["challenge", "evidence_key"]
+
+    def __str__(self) -> str:
+        return f"{self.challenge.flag_id} requires {self.evidence_key}"
 
 
 class Comment(TimeStamped):
@@ -278,7 +331,7 @@ class ReviewState(TimeStamped):
 
 
 class ActivityEvent(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="activity")
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name="activity")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -1,0 +1,17 @@
+{% load static %}
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ACES Scenario Workbench">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" href="{% static 'workbench/brand-mark.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{% static 'workbench/spa/app.css' %}">
+    <title>ACES Workbench</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="{% static 'workbench/spa/app.js' %}"></script>
+  </body>
+</html>

@@ -4,23 +4,23 @@
 
 {% block content %}
   <p class="breadcrumb">
-    <a href="{% url 'dashboard' %}">Projects</a> /
-    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
-    <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
+    <a href="{% url 'dashboard' %}">Scenarios</a> /
+    <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
+    <a href="{% url 'revision-overview' scenario.slug revision.pk %}">{{ revision.label }}</a> /
     Evidence
   </p>
   <h1 class="evidence">{{ object.evidence_id }}</h1>
   {% if object.description %}<p class="subhead">{{ object.description }}</p>{% endif %}
 
   <section class="panel">
-    <h2>Techniques requiring this evidence</h2>
+    <h2>Behaviors requiring this evidence</h2>
     <ul class="card-list">
       {% for technique in object.techniques.all %}
         <li>
-          <a href="{% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
+          <a href="{% url 'technique-detail' scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
         </li>
       {% empty %}
-        <li class="empty">No techniques reference this evidence.</li>
+        <li class="empty">No behaviors reference this evidence.</li>
       {% endfor %}
     </ul>
   </section>

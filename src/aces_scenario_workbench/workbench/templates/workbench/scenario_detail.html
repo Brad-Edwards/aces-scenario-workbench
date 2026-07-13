@@ -1,0 +1,28 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}{{ scenario.name }} — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <p class="breadcrumb"><a href="{% url 'dashboard' %}">Scenarios</a> / {{ scenario.name }}</p>
+  <h1>{{ scenario.name }}</h1>
+  {% if scenario.description %}<p class="subhead">{{ scenario.description }}</p>{% endif %}
+  <p><a href="{% url 'scenario-activity' scenario.slug %}">Scenario activity</a></p>
+
+  {% if revisions %}
+    <section class="panel">
+      <h2>Revisions</h2>
+      <ul class="card-list">
+        {% for revision in revisions %}
+          <li>
+            <a href="{% url 'revision-overview' scenario.slug revision.pk %}">
+              {{ revision.label }}
+            </a>
+            <span class="subhead">imported {{ revision.created_at|date:"Y-m-d" }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% else %}
+    <p class="empty">No revisions imported yet.</p>
+  {% endif %}
+{% endblock %}

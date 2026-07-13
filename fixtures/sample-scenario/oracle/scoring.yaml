@@ -1,0 +1,20 @@
+schema_version: 1
+scoring_id: sample-scenario-scoring
+source_oracle: oracle/objectives.yaml
+mode: objective_projection
+max_points: 250
+awards:
+  - id: recon
+    points: 100
+    evidence: [ev-recon]
+    description: Reconnaissance behavior completed.
+  - id: evasion
+    points: 150
+    evidence: [ev-evasion]
+    description: Evasion behavior planned.
+alternate_awards: []
+bundles:
+  - id: sample-path
+    title: Sample path
+    outcomes: [recon, evasion]
+    points: 250

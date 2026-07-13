@@ -1,0 +1,20 @@
+schema_version: 1
+pack: sample-scenario
+challenges:
+  - flag_id: flag-recon
+    title: Recon Receipt
+    category: Model Security
+    difficulty: easy
+    points: 100
+    question: Submit evidence that the reconnaissance behavior was completed.
+    hints:
+      - Compare the candidate action with the expected evidence event.
+      - The receipt must be tied to the participant namespace.
+  - flag_id: flag-evasion
+    title: Evasion Receipt
+    category: Model Security
+    difficulty: medium
+    points: 150
+    question: Submit evidence that the evasion behavior is planned.
+    hints:
+      - This challenge is planned but not runtime-backed in the sample fixture.

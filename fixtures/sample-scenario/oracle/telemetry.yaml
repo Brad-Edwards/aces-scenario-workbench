@@ -1,0 +1,34 @@
+schema_version: 1
+telemetry_id: sample-scenario-telemetry
+source_oracle: oracle/objectives.yaml
+namespace: [range_instance, participant]
+sink_service: proof-api
+safe_fields:
+  - actor_role
+  - asset_id
+  - digest
+  - event_kind
+  - outcome_id
+  - participant
+  - range_instance
+  - status
+  - timestamp
+forbidden_fields: [answer, credential, flag, prompt, raw_completion]
+events:
+  - id: event-recon
+    evidence: ev-recon
+    event_kind: recon_verdict
+    source_service: proof-api
+    source_asset: proof-service
+    fields: [actor_role, asset_id, event_kind, outcome_id, range_instance, participant, timestamp, status, digest]
+    freshness_seconds: 3600
+    reset_owner: proof-service
+  - id: event-evasion
+    evidence: ev-evasion
+    event_kind: evasion_verdict
+    source_service: proof-api
+    source_asset: proof-service
+    fields: [actor_role, asset_id, event_kind, outcome_id, range_instance, participant, timestamp, status, digest]
+    freshness_seconds: 3600
+    reset_owner: proof-service
+negative_gates: []

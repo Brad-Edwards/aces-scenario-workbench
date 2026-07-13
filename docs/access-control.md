@@ -18,7 +18,7 @@ In the Django admin (`/control/` by default, unless `ACES_WORKBENCH_ADMIN_PATH`
 is set):
 
 1. Go to **Invitations → Add**.
-2. Enter the person's **email**, the **project**, and their **role**.
+2. Enter the person's **email**, the **scenario**, and their **role**.
 3. Save. An email with an accept link is sent automatically.
 
 The accept link:
@@ -34,9 +34,9 @@ again. (With the default console email backend the message prints to the server
 console instead of being delivered — configure SMTP to send for real; see
 [setup](setup.md).)
 
-## Projects, membership, and roles
+## Scenarios, membership, and roles
 
-Access is scoped per project: a signed-in user only sees and acts on projects
+Access is scoped per scenario: a signed-in user only sees and acts on scenarios
 they are a member of. This is enforced on the server — hidden navigation is never
 treated as a substitute for authorization.
 
@@ -49,9 +49,9 @@ Each membership carries a role:
 | Administrator | Yes | Yes |
 | Stakeholder | Yes | No (read-only) |
 
-To grant an existing user access to another project, add a **Membership** (Admin
+To grant an existing user access to another scenario, add a **Membership** (Admin
 → Memberships → Add) with the appropriate role, or send them an invitation to
-that project.
+that scenario.
 
 ## Forgotten passwords
 
@@ -61,7 +61,7 @@ delivery being configured.
 
 ## Removing access
 
-- Delete a user's **Membership** to remove their access to a single project.
+- Delete a user's **Membership** to remove their access to a single scenario.
 - Deactivate or delete the **User** in the admin to revoke access entirely.
 - A signed-in user can export or delete **their own** account and content from
   the account page (`/me/`).

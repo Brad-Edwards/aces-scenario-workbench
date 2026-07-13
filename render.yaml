@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: keplerops-workbench
+    runtime: docker
+    branch: dev
+    region: virginia
+    plan: starter
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    domains:
+      - workbench.keplerops.com
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: keplerops-workbench-db
+          property: connectionString
+      - key: ACES_WORKBENCH_SECRET_KEY
+        generateValue: true
+      - key: ACES_WORKBENCH_DEBUG
+        value: "0"
+      - key: ACES_WORKBENCH_ALLOWED_HOSTS
+        value: workbench.keplerops.com,.onrender.com
+      - key: ACES_WORKBENCH_CSRF_TRUSTED_ORIGINS
+        value: https://workbench.keplerops.com,https://*.onrender.com
+      - key: ACES_WORKBENCH_SECURE_COOKIES
+        value: "1"
+      - key: ACES_WORKBENCH_SSL_REDIRECT
+        value: "1"
+      - key: ACES_WORKBENCH_DEFAULT_FROM_EMAIL
+        value: workbench@keplerops.com
+
+databases:
+  - name: keplerops-workbench-db
+    databaseName: aces_workbench
+    user: aces_workbench
+    region: virginia
+    plan: basic_256mb

@@ -1,0 +1,41 @@
+schema_version: 1
+name: sample-topology
+profiles:
+  local: {}
+zones:
+  - name: participant
+    kind: user
+networks:
+  - name: lab
+    zone: participant
+assets:
+  - id: proof-service
+    hostname: proof.local
+    asset_type: service-host
+    role: evidence collector
+    zone: participant
+    networks: [lab]
+    software_component: proof-api
+    visibility: participant-visible
+    reset_owner: proof-service
+    implementation_status: implemented
+    description: Receives synthetic proof events.
+services:
+  - id: proof-api
+    asset: proof-service
+    ports: [8080]
+    software_component: proof-api
+    visibility: participant-visible
+    reset_owner: proof-service
+    description: Proof API endpoint.
+applications: []
+datasets: []
+artifacts: []
+path_objectives:
+  - id: obj-sample
+    title: Sample path
+    success_states: [S-RECON, S-EVASION]
+validation_flows:
+  - id: validate-sample
+    command: validation/validate_contract.py
+    covers: [obj-sample]

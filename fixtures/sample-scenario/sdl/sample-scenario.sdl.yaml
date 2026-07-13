@@ -1,0 +1,44 @@
+name: sample-scenario
+version: 1.0.0
+description: Minimal SDL fixture used as the authoritative topology source in tests.
+nodes:
+  participant-workstation:
+    type: VM
+    os: linux
+    os_version: Debian 12
+    resources: { ram: 2 GiB, cpu: 1 }
+    description: Participant workstation.
+    services:
+      - name: browser-terminal-ssh
+        port: 22
+  proof-service:
+    type: VM
+    os: linux
+    os_version: Debian 12
+    resources: { ram: 1 GiB, cpu: 1 }
+    description: Synthetic proof service.
+    services:
+      - name: proof-api
+        port: 8080
+entities:
+  participant-team:
+    role: red
+    description: Authorized participant team.
+agents:
+  participant:
+    entity: participant-team
+    description: Offensive participant.
+    initial-knowledge:
+      hosts: [participant-workstation, proof-service]
+      services: [browser-terminal-ssh, proof-api]
+behavior-specifications:
+  module-01-recon:
+    semantic-version: 1.0.0
+    lifecycle-state: draft
+    participant-refs: [participant]
+    ai-offensive-behavior-refs: [reconnaissance]
+  module-02-evasion:
+    semantic-version: 1.0.0
+    lifecycle-state: draft
+    participant-refs: [participant]
+    ai-offensive-behavior-refs: [defense-evasion]

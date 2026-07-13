@@ -1,13 +1,13 @@
 {% comment %}
-Collaboration panel for one scenario object. Expects: project, scenario,
-revision, object_type, object_stable_id, review_state, review_statuses,
+Collaboration panel for one scenario object. Expects: scenario, revision,
+object_type, object_stable_id, review_state, review_statuses,
 decisions, decision_types, comments, can_contribute.
 {% endcomment %}
 <section class="panel" aria-labelledby="review-heading">
   <h2 id="review-heading">Review</h2>
   <p>Status: <strong>{% if review_state %}{{ review_state.get_status_display }}{% else %}Unreviewed{% endif %}</strong></p>
   {% if can_contribute %}
-    <form method="post" action="{% url 'object-review-state' project.slug scenario.slug revision.pk object_type object_stable_id %}">
+    <form method="post" action="{% url 'object-review-state' scenario.slug revision.pk object_type object_stable_id %}">
       {% csrf_token %}
       <label for="review-status">Set status</label>
       <select id="review-status" name="status">
@@ -32,7 +32,7 @@ decisions, decision_types, comments, can_contribute.
     {% endfor %}
   </ul>
   {% if can_contribute %}
-    <form method="post" action="{% url 'object-decision' project.slug scenario.slug revision.pk object_type object_stable_id %}">
+    <form method="post" action="{% url 'object-decision' scenario.slug revision.pk object_type object_stable_id %}">
       {% csrf_token %}
       <label for="decision-type">Decision</label>
       <select id="decision-type" name="decision">
@@ -58,7 +58,7 @@ decisions, decision_types, comments, can_contribute.
     {% endfor %}
   </ul>
   {% if can_contribute %}
-    <form method="post" action="{% url 'object-comment' project.slug scenario.slug revision.pk object_type object_stable_id %}">
+    <form method="post" action="{% url 'object-comment' scenario.slug revision.pk object_type object_stable_id %}">
       {% csrf_token %}
       <label for="comment-body">Add a comment</label>
       <textarea id="comment-body" name="body" rows="3" required></textarea>

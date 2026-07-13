@@ -1,0 +1,12 @@
+schema_version: 1
+pack: sample-scenario
+description: Minimal planned asset fixture.
+asset_sets:
+  - asset_id: proof-service
+    category: evidence
+    implementation_status: implemented_source
+    paths: [fixtures/sample-scenario/oracle/telemetry.yaml]
+    visibility: participant-visible
+    source_refs: [proof-api]
+    topology_refs: [proof-service]
+    implementation_plan: Keep proof events synthetic for fixture tests.

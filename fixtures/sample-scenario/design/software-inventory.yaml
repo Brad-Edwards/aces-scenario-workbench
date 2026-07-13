@@ -1,0 +1,9 @@
+schema_version: 1
+components:
+  - component_id: proof-api
+    topology_refs: [proof-service]
+    upstream: local
+    operating_mode: synthetic
+    profiles: [local]
+    authenticity: fixture
+    path_critical: true

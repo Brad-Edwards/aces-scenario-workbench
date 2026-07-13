@@ -21,14 +21,14 @@ from aces_scenario_workbench.accounts.admin import InvitationAdmin
 from aces_scenario_workbench.accounts.emails import invitation_link, send_invitation_email
 from aces_scenario_workbench.accounts.forms import UserChangeForm, UserCreationForm
 from aces_scenario_workbench.accounts.models import Invitation
-from aces_scenario_workbench.workbench.models import Project, Role
+from aces_scenario_workbench.workbench.models import Role, Scenario
 
 User = get_user_model()
 
 
 @pytest.fixture
-def project(db):
-    return Project.objects.create(slug="demo", name="Demo Project")
+def scenario(db):
+    return Scenario.objects.create(slug="demo", name="Demo Scenario")
 
 
 def _admin_request(user):
@@ -40,14 +40,14 @@ def _admin_request(user):
     return request
 
 
-def test_invitation_link(project):
-    invitation = Invitation.objects.create(email="a@example.com", project=project)
+def test_invitation_link(scenario):
+    invitation = Invitation.objects.create(email="a@example.com", scenario=scenario)
     link = invitation_link(invitation, "http://testserver/")
     assert link.endswith(f"/accounts/invite/{invitation.token}/")
 
 
-def test_send_invitation_email(project):
-    invitation = Invitation.objects.create(email="a@example.com", project=project)
+def test_send_invitation_email(scenario):
+    invitation = Invitation.objects.create(email="a@example.com", scenario=scenario)
     send_invitation_email(invitation, "http://testserver/")
     assert len(mail.outbox) == 1
     message = mail.outbox[0]
@@ -55,21 +55,21 @@ def test_send_invitation_email(project):
     assert invitation.token in message.body
 
 
-def test_invitation_admin_save_sends_email(project):
+def test_invitation_admin_save_sends_email(scenario):
     admin = InvitationAdmin(Invitation, AdminSite())
     inviter = User.objects.create_user(email="admin@example.com", password="review-pass-1")
     request = _admin_request(inviter)
-    invitation = Invitation(email="new@example.com", project=project, role=Role.AUTHOR)
+    invitation = Invitation(email="new@example.com", scenario=scenario, role=Role.AUTHOR)
     admin.save_model(request, invitation, form=None, change=False)
     assert invitation.pk is not None
     assert invitation.invited_by == inviter
     assert len(mail.outbox) == 1
 
 
-def test_invitation_admin_resend_action(project):
+def test_invitation_admin_resend_action(scenario):
     admin = InvitationAdmin(Invitation, AdminSite())
     inviter = User.objects.create_user(email="admin@example.com", password="review-pass-1")
-    invitation = Invitation.objects.create(email="new@example.com", project=project)
+    invitation = Invitation.objects.create(email="new@example.com", scenario=scenario)
     request = _admin_request(inviter)
     admin.resend_invitation_email(request, Invitation.objects.filter(pk=invitation.pk))
     assert len(mail.outbox) == 1

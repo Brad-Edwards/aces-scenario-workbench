@@ -19,4 +19,4 @@ EXPOSE 8000
 
 # Apply migrations, then serve with gunicorn. Provide DATABASE_URL and
 # ACES_WORKBENCH_SECRET_KEY via the environment.
-CMD ["sh", "-c", "aces-workbench migrate --noinput && gunicorn aces_scenario_workbench.wsgi:application --bind 0.0.0.0:8000 --workers 3"]
+CMD ["sh", "-c", "aces-workbench migrate --noinput && gunicorn aces_scenario_workbench.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3}"]
