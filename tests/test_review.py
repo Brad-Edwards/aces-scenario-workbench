@@ -44,9 +44,13 @@ def test_revision_overview_renders(client, workspace):
     client.force_login(member)
     response = client.get(reverse("revision-overview", args=_args(project, revision)))
     assert response.status_code == 200
+    assert b"Coverage overview" in response.content
+    assert b"Technique relationships by tactic" in response.content
+    assert b"Challenge progression" in response.content
     assert b"Techniques" in response.content
     assert b"AML.T0000" in response.content
     assert b"Modules" in response.content
+    assert b"Planned in-world variant" in response.content
 
 
 def test_object_detail_pages(client, workspace):
@@ -100,6 +104,7 @@ def test_landing_has_theme_toggle_and_stylesheet(client):
     response = client.get(reverse("landing"))
     assert b"data-theme-toggle" in response.content
     assert b"workbench/app.css" in response.content
+    assert b"data-cookie-notice" in response.content
 
 
 def test_revision_overview_has_filter_toolbar(client, workspace):
@@ -109,6 +114,9 @@ def test_revision_overview_has_filter_toolbar(client, workspace):
     for field in (b'name="q"', b'name="module"', b'name="tactic"', b'name="level"'):
         assert field in response.content
     assert b"Showing 3 of 3 techniques" in response.content
+    assert b'class="top-metric"' in response.content
+    assert b'class="bar-row"' in response.content
+    assert b'class="progress-step"' in response.content
 
 
 def test_technique_search_matches_name_and_evidence_and_action(client, workspace):

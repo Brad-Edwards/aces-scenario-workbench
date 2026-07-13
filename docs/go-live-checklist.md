@@ -30,7 +30,7 @@ Work through this before exposing an instance to the internet. See
       understand why a warning is acceptable for your deployment.
 - [ ] Migrations are applied (`aces-workbench migrate`).
 - [ ] The first administrator exists (`aces-workbench createadmin`).
-- [ ] The Django admin (`/admin/`) is restricted to administrators.
+- [ ] The configured Django admin path is restricted to administrators.
 - [ ] Sign in over HTTPS, create a project, and send yourself an invitation to
       confirm email delivery end to end.
 

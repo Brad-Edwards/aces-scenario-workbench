@@ -33,8 +33,9 @@ current directory). Point it at PostgreSQL by setting `DATABASE_URL`:
 export DATABASE_URL=postgres://user:pass@localhost:5432/workbench
 ```
 
-The Django admin (`/admin/`) is available to administrators for creating
-projects and managing membership.
+The Django admin defaults to `/control/` and is available to administrators for
+creating projects and managing membership. Set `ACES_WORKBENCH_ADMIN_PATH` to
+use a deployment-specific admin path.
 
 ## Documentation
 
@@ -81,7 +82,7 @@ rate-limits password-reset and invitation requests. `aces-workbench doctor`
 reports the live posture. `aces-workbench serve` is the development server and
 runs in debug mode; host with the container path in
 [`docs/deployment.md`](docs/deployment.md). Keep the Django admin
-(`/admin/`) restricted to administrators.
+restricted to administrators.
 
 ## CLI
 
@@ -95,7 +96,7 @@ aces-workbench manage <command> [...]         # any Django management command
 ```
 
 Administrators create projects and invite members from the Django admin
-(`/admin/`); import a scenario pack's ATLAS technique projection with
+(`/control/` by default); import a scenario pack's ATLAS technique projection with
 `aces-workbench import <pack-path> --project <slug>`.
 
 ## Development

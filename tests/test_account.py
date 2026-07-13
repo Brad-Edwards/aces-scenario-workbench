@@ -71,7 +71,15 @@ def test_account_export_requires_login(client):
 
 def test_account_delete_removes_user_and_content(client, user_with_data):
     client.force_login(user_with_data)
-    response = client.post(reverse("account-delete"))
+    confirm = client.get(reverse("account-delete"))
+    assert confirm.status_code == 200
+    assert b"Type your email address to confirm" in confirm.content
+
+    rejected = client.post(reverse("account-delete"), {"confirm_email": "wrong@example.com"})
+    assert rejected.status_code == 400
+    assert User.objects.filter(email="member@example.com").exists()
+
+    response = client.post(reverse("account-delete"), {"confirm_email": "member@example.com"})
     assert response.status_code == 302
     assert response.url == reverse("landing")
     assert not User.objects.filter(email="member@example.com").exists()
@@ -81,7 +89,7 @@ def test_account_delete_removes_user_and_content(client, user_with_data):
 
 def test_account_delete_requires_post(client, user_with_data):
     client.force_login(user_with_data)
-    assert client.get(reverse("account-delete")).status_code == 405
+    assert client.get(reverse("account-delete")).status_code == 200
 
 
 def test_privacy_page_is_public(client):

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ACES Scenario Workbench">
+  <rect width="64" height="64" rx="14" fill="#20272c"/>
+  <path d="M32 9 52 20.5v23L32 55 12 43.5v-23L32 9Z" fill="#f7f8f8"/>
+  <path d="M32 15.5 46.5 24v16L32 48.5 17.5 40V24L32 15.5Z" fill="#1769aa"/>
+  <path d="M32 21 41.5 26.5v11L32 43 22.5 37.5v-11L32 21Z" fill="#44a06d"/>
+  <path d="M32 26.5 37 29.5v5L32 37.5 27 34.5v-5L32 26.5Z" fill="#20272c"/>
+</svg>

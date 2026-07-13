@@ -4,6 +4,7 @@
 
 {% block content %}
   <p class="breadcrumb">
+    <a href="{% url 'dashboard' %}">Projects</a> /
     <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
     <a href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}">{{ scenario.name }} {{ revision.label }}</a> /
     Technique

@@ -4,7 +4,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="data:,">
+    <meta name="description" content="{% block meta_description %}ACES Scenario Workbench turns validated scenario review bundles into secure, collaborative review workspaces.{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}ACES Scenario Workbench{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Secure collaborative review for ACES scenario packs.{% endblock %}">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#20272c">
+    <link rel="icon" href="{% static 'workbench/brand-mark.svg' %}" type="image/svg+xml">
     <link rel="stylesheet" href="{% static 'workbench/app.css' %}">
     <title>{% block title %}ACES Scenario Workbench{% endblock %}</title>
     <script nonce="{{ request.csp_nonce }}">
@@ -21,16 +27,28 @@
     <a class="skip-link" href="#main">Skip to main content</a>
     <header class="topbar">
       <div class="brand">
-        <strong><a href="{% url 'landing' %}">ACES Scenario Workbench</a></strong>
-        <span>Collaborative review for ACES scenario packs</span>
+        <a class="brand-lockup" href="{% url 'landing' %}" aria-label="ACES Scenario Workbench home">
+          <img src="{% static 'workbench/brand-mark.svg' %}" alt="" width="34" height="34">
+          <span>
+            <strong>ACES Scenario Workbench</strong>
+            <span>Secure collaborative scenario review</span>
+          </span>
+        </a>
       </div>
+      {% block topbar_status %}{% endblock %}
+      {% block topbar_metrics %}{% endblock %}
       <nav class="topbar-actions" aria-label="Primary">
         {% if user.is_authenticated %}
           <a href="{% url 'dashboard' %}">Projects</a>
           <a href="{% url 'account' %}">Account</a>
+          {% if user.is_staff %}
+            <a href="{% url 'admin:index' %}">Admin</a>
+          {% endif %}
+        {% else %}
+          <a href="{% url 'login' %}">Sign in</a>
         {% endif %}
         <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">
-          Toggle theme
+          Theme
         </button>
         {% if user.is_authenticated %}
           <form class="logout-inline" method="post" action="{% url 'logout' %}">
@@ -40,9 +58,27 @@
         {% endif %}
       </nav>
     </header>
+    {% block secondary_nav %}{% endblock %}
     <main id="main">
       {% block content %}{% endblock %}
     </main>
+    <footer class="site-footer">
+      <span>ACES Scenario Workbench</span>
+      <nav aria-label="Footer">
+        <a href="{% url 'privacy' %}">Privacy</a>
+        <a href="{% url 'landing' %}#cookies">Cookies</a>
+      </nav>
+    </footer>
+    <section class="cookie-notice" data-cookie-notice hidden aria-label="Cookie notice">
+      <div>
+        <strong>Essential cookies</strong>
+        <p>
+          This service uses session, CSRF, and rate-limit cookies for sign-in and
+          security. Theme and notice preferences stay in your browser.
+        </p>
+      </div>
+      <button type="button" data-cookie-accept>Got it</button>
+    </section>
     <script src="{% static 'workbench/app.js' %}" defer></script>
   </body>
 </html>

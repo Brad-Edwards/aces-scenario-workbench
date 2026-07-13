@@ -50,6 +50,7 @@ class Command(BaseCommand):
         self._report("Brute-force protection", "django-axes", "axes" in settings.INSTALLED_APPS)
         csp_on = "csp.middleware.CSPMiddleware" in settings.MIDDLEWARE
         self._report("Content-Security-Policy", "on" if csp_on else "off", csp_on)
+        self._report("Admin path", f"/{settings.ADMIN_PATH}", settings.ADMIN_PATH != "admin/")
 
     def _report_deployment_prereqs(self) -> None:
         # In debug these local defaults are fine; a public instance must set its

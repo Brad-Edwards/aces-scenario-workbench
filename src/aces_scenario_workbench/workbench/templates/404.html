@@ -1,0 +1,11 @@
+{% extends "workbench/base.html" %}
+
+{% block title %}Page not found — ACES Scenario Workbench{% endblock %}
+
+{% block content %}
+  <section class="panel readable">
+    <h1>Page not found</h1>
+    <p>The page you requested does not exist or is not available to your account.</p>
+    <p><a class="button-secondary" href="{% url 'dashboard' %}">Back to projects</a></p>
+  </section>
+{% endblock %}
