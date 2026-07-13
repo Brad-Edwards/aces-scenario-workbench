@@ -25,7 +25,7 @@ def _apply_invitation(
     """Perform an invitation acceptance; returns a redirect, or None if invalid."""
     if existing is not None:
         invitation.accept(existing)
-        messages.success(request, "You have been added to the project. Please sign in.")
+        messages.success(request, "You have been added to the scenario. Please sign in.")
         return redirect("login")
     if form is not None and form.is_valid():
         user = User(
@@ -39,14 +39,14 @@ def _apply_invitation(
         # Multiple auth backends are configured (django-axes sits in front of the
         # model backend), so the backend must be named for a manual login.
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-        return redirect("dashboard")
+        return redirect("spa-app")
     return None
 
 
 @ratelimit(key="ip", rate="10/h", method="POST", block=True)
 @require_http_methods(["GET", "POST"])
 def invite_accept(request: HttpRequest, token: str) -> HttpResponse:
-    """Accept a project invitation, registering a new account when needed."""
+    """Accept a scenario invitation, registering a new account when needed."""
     invitation = get_object_or_404(Invitation, token=token)
     if not invitation.is_pending():
         return render(
@@ -71,8 +71,8 @@ def _export_payload(user: User) -> dict[str, Any]:
         "display_name": user.display_name,
         "date_joined": user.date_joined.isoformat(),
         "memberships": [
-            {"project": m.project.slug, "role": m.role}
-            for m in user.memberships.select_related("project")
+            {"scenario": m.scenario.slug, "role": m.role}
+            for m in user.memberships.select_related("scenario")
         ],
         "comments": [
             {

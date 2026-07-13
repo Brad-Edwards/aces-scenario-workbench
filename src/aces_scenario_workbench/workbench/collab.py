@@ -19,10 +19,10 @@ from .models import (
     Decision,
     DecisionType,
     ObjectType,
-    Project,
     ReviewState,
     ReviewStatus,
     Revision,
+    Scenario,
 )
 
 _DETAIL_URL = {
@@ -46,7 +46,7 @@ def object_collab_context(
         "comments": Comment.objects.filter(**anchor).select_related("author"),
         "decisions": Decision.objects.filter(**anchor).select_related("author"),
         "review_state": ReviewState.objects.filter(**anchor).first(),
-        "can_contribute": authz.can_contribute(request.user, revision.scenario.project),
+        "can_contribute": authz.can_contribute(request.user, revision.scenario),
         "review_statuses": ReviewStatus.choices,
         "decision_types": DecisionType.choices,
     }
@@ -57,9 +57,9 @@ def _valid_object_type(object_type: str) -> None:
         raise Http404("Unknown object type.")
 
 
-def _record(project: Project, actor: object, verb: str, object_type: str, stable_id: str) -> None:
+def _record(scenario: Scenario, actor: object, verb: str, object_type: str, stable_id: str) -> None:
     ActivityEvent.objects.create(
-        project=project,
+        scenario=scenario,
         actor=actor,
         verb=verb,
         object_type=object_type,
@@ -68,26 +68,22 @@ def _record(project: Project, actor: object, verb: str, object_type: str, stable
 
 
 def _back(revision: Revision, object_type: str, stable_id: str) -> HttpResponse:
-    project = revision.scenario.project
-    return redirect(
-        _DETAIL_URL[object_type], project.slug, revision.scenario.slug, revision.pk, stable_id
-    )
+    return redirect(_DETAIL_URL[object_type], revision.scenario.slug, revision.pk, stable_id)
 
 
 @login_required
 @require_POST
 def post_comment(
     request: HttpRequest,
-    project_slug: str,
     scenario_slug: str,
     revision_pk: int,
     object_type: str,
     object_stable_id: str,
 ) -> HttpResponse:
     _valid_object_type(object_type)
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
-    project = revision.scenario.project
-    if not authz.can_contribute(request.user, project):
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
+    scenario = revision.scenario
+    if not authz.can_contribute(request.user, scenario):
         return HttpResponseForbidden("You do not have permission to comment.")
     body = request.POST.get("body", "").strip()
     if body:
@@ -98,7 +94,7 @@ def post_comment(
             author=request.user,
             body=body,
         )
-        _record(project, request.user, "commented", object_type, object_stable_id)
+        _record(scenario, request.user, "commented", object_type, object_stable_id)
     return _back(revision, object_type, object_stable_id)
 
 
@@ -106,16 +102,15 @@ def post_comment(
 @require_POST
 def set_review_state(
     request: HttpRequest,
-    project_slug: str,
     scenario_slug: str,
     revision_pk: int,
     object_type: str,
     object_stable_id: str,
 ) -> HttpResponse:
     _valid_object_type(object_type)
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
-    project = revision.scenario.project
-    if not authz.can_contribute(request.user, project):
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
+    scenario = revision.scenario
+    if not authz.can_contribute(request.user, scenario):
         return HttpResponseForbidden("You do not have permission to set review state.")
     status = request.POST.get("status", "")
     if status in ReviewStatus.values:
@@ -126,7 +121,7 @@ def set_review_state(
             defaults={"status": status, "updated_by": request.user},
         )
         _record(
-            project, request.user, f"set review state to {status}", object_type, object_stable_id
+            scenario, request.user, f"set review state to {status}", object_type, object_stable_id
         )
     return _back(revision, object_type, object_stable_id)
 
@@ -135,16 +130,15 @@ def set_review_state(
 @require_POST
 def record_decision(
     request: HttpRequest,
-    project_slug: str,
     scenario_slug: str,
     revision_pk: int,
     object_type: str,
     object_stable_id: str,
 ) -> HttpResponse:
     _valid_object_type(object_type)
-    revision = access.scoped_revision(request, project_slug, scenario_slug, revision_pk)
-    project = revision.scenario.project
-    if not authz.can_contribute(request.user, project):
+    revision = access.scoped_revision(request, scenario_slug, revision_pk)
+    scenario = revision.scenario
+    if not authz.can_contribute(request.user, scenario):
         return HttpResponseForbidden("You do not have permission to record decisions.")
     decision = request.POST.get("decision", "")
     if decision in DecisionType.values:
@@ -157,6 +151,6 @@ def record_decision(
             rationale=request.POST.get("rationale", "").strip(),
         )
         _record(
-            project, request.user, f"recorded decision {decision}", object_type, object_stable_id
+            scenario, request.user, f"recorded decision {decision}", object_type, object_stable_id
         )
     return _back(revision, object_type, object_stable_id)

@@ -76,11 +76,11 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class Invitation(models.Model):
-    """A single-use, expiring invitation for a user to join a project."""
+    """A single-use, expiring invitation for a user to join a scenario."""
 
     email = models.EmailField()
-    project = models.ForeignKey(
-        "workbench.Project", on_delete=models.CASCADE, related_name="invitations"
+    scenario = models.ForeignKey(
+        "workbench.Scenario", on_delete=models.CASCADE, related_name="invitations"
     )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.REVIEWER)
     token = models.CharField(max_length=64, unique=True, default=_default_invitation_token)
@@ -98,7 +98,7 @@ class Invitation(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"Invitation for {self.email} to {self.project_id}"
+        return f"Invitation for {self.email} to {self.scenario_id}"
 
     def is_expired(self) -> bool:
         return timezone.now() > self.created_at + timedelta(days=INVITATION_TTL_DAYS)
@@ -110,7 +110,7 @@ class Invitation(models.Model):
         from aces_scenario_workbench.workbench.models import Membership
 
         Membership.objects.get_or_create(
-            project=self.project, user=user, defaults={"role": self.role}
+            scenario=self.scenario, user=user, defaults={"role": self.role}
         )
         self.accepted_at = timezone.now()
         self.save(update_fields=["accepted_at"])

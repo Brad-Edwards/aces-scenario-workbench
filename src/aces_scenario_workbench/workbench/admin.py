@@ -4,11 +4,12 @@ from django.contrib import admin
 
 from .models import (
     ActivityEvent,
+    Challenge,
+    ChallengeEvidenceRequirement,
     Comment,
     Decision,
     Evidence,
     Membership,
-    Project,
     ReviewState,
     Revision,
     Scenario,
@@ -24,8 +25,8 @@ class MembershipInline(admin.TabularInline):
     autocomplete_fields = ("user",)
 
 
-@admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
+@admin.register(Scenario)
+class ScenarioAdmin(admin.ModelAdmin):
     list_display = ("name", "slug", "created_at")
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
@@ -34,22 +35,15 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = ("project", "user", "role")
+    list_display = ("scenario", "user", "role")
     list_filter = ("role",)
-    search_fields = ("project__name", "user__email")
-
-
-@admin.register(Scenario)
-class ScenarioAdmin(admin.ModelAdmin):
-    list_display = ("name", "project", "slug")
-    list_filter = ("project",)
-    search_fields = ("name", "slug")
+    search_fields = ("scenario__name", "user__email")
 
 
 @admin.register(Revision)
 class RevisionAdmin(admin.ModelAdmin):
     list_display = ("label", "scenario", "mapping_id", "content_digest", "created_at")
-    list_filter = ("scenario__project",)
+    list_filter = ("scenario",)
     search_fields = ("label", "mapping_id", "content_digest")
 
 
@@ -79,6 +73,33 @@ class TechniqueAdmin(admin.ModelAdmin):
     filter_horizontal = ("tactics",)
 
 
+class ChallengeEvidenceInline(admin.TabularInline):
+    model = ChallengeEvidenceRequirement
+    extra = 0
+    autocomplete_fields = ("evidence",)
+
+
+@admin.register(Challenge)
+class ChallengeAdmin(admin.ModelAdmin):
+    list_display = ("flag_id", "title", "outcome_id", "step", "difficulty", "points", "implemented")
+    list_filter = ("implemented", "difficulty", "category")
+    search_fields = ("flag_id", "title", "outcome_id")
+    filter_horizontal = ("techniques",)
+    inlines = (ChallengeEvidenceInline,)
+
+
+@admin.register(ChallengeEvidenceRequirement)
+class ChallengeEvidenceRequirementAdmin(admin.ModelAdmin):
+    list_display = (
+        "evidence_key",
+        "challenge",
+        "event_kind",
+        "source_service",
+        "freshness_seconds",
+    )
+    search_fields = ("evidence_key", "event_kind", "source_service", "source_asset")
+
+
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = ("author", "object_type", "object_stable_id", "revision", "created_at")
@@ -99,5 +120,5 @@ class ReviewStateAdmin(admin.ModelAdmin):
 
 @admin.register(ActivityEvent)
 class ActivityEventAdmin(admin.ModelAdmin):
-    list_display = ("verb", "actor", "project", "object_type", "object_stable_id", "created_at")
+    list_display = ("verb", "actor", "scenario", "object_type", "object_stable_id", "created_at")
     list_filter = ("verb",)

@@ -1,6 +1,6 @@
-You have been invited to join a project on the ACES Scenario Workbench.
+You have been invited to join a scenario on the ACES Scenario Workbench.
 
-Project: {{ invitation.project }}
+Scenario: {{ invitation.scenario }}
 Role: {{ invitation.get_role_display }}
 
 To accept the invitation and set your password, open:

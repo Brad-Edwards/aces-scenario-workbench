@@ -8,13 +8,13 @@
       <p class="eyebrow">Multi-scenario review workspace</p>
       <h1>Turn validated ACES review bundles into a secure collaboration surface.</h1>
       <p class="lede">
-        Inspect techniques, tactics, modules, evidence, and review decisions in
+        Inspect SDL behaviors, modules, evidence, and review decisions in
         one authenticated workspace. Scenario packs remain the source of truth;
         the workbench owns comments, decisions, and review state.
       </p>
       <div class="hero-actions">
         {% if user.is_authenticated %}
-          <a class="button-primary" href="{% url 'dashboard' %}">Open projects</a>
+          <a class="button-primary" href="{% url 'dashboard' %}">Open scenarios</a>
         {% else %}
           <a class="button-primary" href="{% url 'login' %}">Sign in</a>
         {% endif %}
@@ -27,7 +27,7 @@
         <strong>Dashboard core</strong>
       </div>
       <dl class="metric-list">
-        <div><dt>Scenarios</dt><dd>Project-scoped</dd></div>
+        <div><dt>Scenarios</dt><dd>Access-scoped</dd></div>
         <div><dt>Revisions</dt><dd>Immutable</dd></div>
         <div><dt>Rows & tiles</dt><dd>Addressable</dd></div>
         <div><dt>Review state</dt><dd>Auditable</dd></div>
@@ -40,20 +40,20 @@
       <h2>Dashboard-first review</h2>
       <p>
         Each revision opens as a dense dashboard with overview charts,
-        progression tiles, searchable technique rows, and module cards.
+        progression tiles, searchable behavior rows, and module cards.
       </p>
     </article>
     <article class="panel">
       <h2>Stable object URLs</h2>
       <p>
-        Techniques, tactics, modules, and evidence resolve to real routes so
+        Behaviors, modules, and evidence resolve to real routes so
         teams can share and discuss specific scenario objects.
       </p>
     </article>
     <article class="panel">
       <h2>Internet-safe collaboration</h2>
       <p>
-        Sign-in, project membership, CSRF/session protections, rate limits, and
+        Sign-in, scenario membership, CSRF/session protections, rate limits, and
         per-object comments keep review activity inside the workbench boundary.
       </p>
     </article>

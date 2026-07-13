@@ -54,5 +54,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         _run(["aces-workbench", *rest])
     elif command == "import":
         _run(["aces-workbench", "import_projection", *rest])
+    elif command == "sync":
+        _run(["aces-workbench", "sync_scenario", *rest])
     else:
         _run(["aces-workbench", *args])

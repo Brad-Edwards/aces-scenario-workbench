@@ -1,0 +1,161 @@
+:root {
+  color-scheme: dark;
+  --background: #0a0a0b;
+  --foreground: #f5f5f5;
+  --muted: #a1a1aa;
+  --card: #161618;
+  --border: #2f2f33;
+  --primary: #0a66e0;
+  --primary-hover: #0b74ff;
+  --danger: #f87171;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(10 102 224 / 18%), transparent 36rem),
+    var(--background);
+  color: var(--foreground);
+}
+
+a {
+  color: inherit;
+}
+
+.auth-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem;
+}
+
+.auth-card {
+  width: min(100%, 27rem);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: rgb(22 22 24 / 88%);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 35%);
+  padding: 1.5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.brand img {
+  border-radius: 0.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: -0.04em;
+}
+
+.lede {
+  margin: 0.5rem 0 1.5rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.error-summary {
+  margin-bottom: 1rem;
+  border: 1px solid rgb(248 113 113 / 35%);
+  border-radius: 0.75rem;
+  background: rgb(248 113 113 / 10%);
+  color: var(--danger);
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+}
+
+form {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: #0f0f11;
+  color: var(--foreground);
+  font: inherit;
+  outline: none;
+  padding: 0.7rem 0.8rem;
+}
+
+input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgb(10 102 224 / 25%);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+button {
+  width: 100%;
+  border: 0;
+  border-radius: 0.65rem;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 0.75rem 1rem;
+}
+
+button:hover,
+button:focus {
+  background: var(--primary-hover);
+}
+
+.secondary-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.secondary-actions a:hover,
+.secondary-actions a:focus {
+  color: var(--foreground);
+}

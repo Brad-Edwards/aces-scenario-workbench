@@ -8,8 +8,8 @@
 
 {% block topbar_metrics %}
   <div class="top-metrics" aria-label="Revision metrics">
-    <div class="top-metric"><b>{{ counts.techniques }}</b><span>Techniques</span></div>
-    <div class="top-metric"><b>{{ counts.tactics }}</b><span>Tactics</span></div>
+    <div class="top-metric"><b>{{ counts.techniques }}</b><span>Behaviors</span></div>
+    <div class="top-metric"><b>{{ counts.tactics }}</b><span>Behavior refs</span></div>
     <div class="top-metric"><b>{{ counts.steps }}</b><span>Modules</span></div>
     <div class="top-metric"><b>{{ counts.quick_starts }}</b><span>Quick starts</span></div>
   </div>
@@ -18,16 +18,15 @@
 {% block secondary_nav %}
   <nav class="tabs" aria-label="Review views">
     <button id="tab-overview" class="tab" type="button" data-view="overview" aria-pressed="true" aria-controls="view-overview">Overview</button>
-    <button id="tab-techniques" class="tab" type="button" data-view="techniques" aria-pressed="false" aria-controls="view-techniques">Techniques</button>
+    <button id="tab-techniques" class="tab" type="button" data-view="techniques" aria-pressed="false" aria-controls="view-techniques">Behaviors</button>
     <button id="tab-modules" class="tab" type="button" data-view="modules" aria-pressed="false" aria-controls="view-modules">Modules</button>
   </nav>
 {% endblock %}
 
 {% block content %}
   <p class="breadcrumb">
-    <a href="{% url 'dashboard' %}">Projects</a> /
-    <a href="{% url 'project-detail' project.slug %}">{{ project.name }}</a> /
-    {{ scenario.name }} /
+    <a href="{% url 'dashboard' %}">Scenarios</a> /
+    <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
     {{ revision.label }}
   </p>
 
@@ -38,8 +37,8 @@
     </p>
 
     <div class="summary-grid">
-      <div class="summary-item"><b>{{ counts.techniques }}</b><span>Pinned techniques</span></div>
-      <div class="summary-item"><b>{{ counts.tactics }}</b><span>Governed tactics</span></div>
+      <div class="summary-item"><b>{{ counts.techniques }}</b><span>Pinned behaviors</span></div>
+      <div class="summary-item"><b>{{ counts.tactics }}</b><span>Behavior refs</span></div>
       <div class="summary-item"><b>{{ counts.steps }}</b><span>Selectable modules</span></div>
       <div class="summary-item">
         <b>{% if shortest_minutes %}{{ shortest_minutes }} min{% else %}—{% endif %}</b>
@@ -49,17 +48,17 @@
 
     <div class="split">
       <section class="panel">
-        <h2>Technique relationships by tactic</h2>
+        <h2>Behavior relationships by ref</h2>
         <div class="bars">
           {% for tactic in tactics %}
-            {% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id as tactic_url %}
+            {% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id as tactic_url %}
             <a class="bar-row" href="{{ tactic_url }}" title="{{ tactic.tactic_id }}">
               <span class="bar-label">{{ tactic.name }}</span>
-              <progress class="bar-track" value="{{ tactic.technique_count }}" max="{{ max_tactic_count }}" aria-label="{{ tactic.name }} technique count"></progress>
+              <progress class="bar-track" value="{{ tactic.technique_count }}" max="{{ max_tactic_count }}" aria-label="{{ tactic.name }} behavior count"></progress>
               <span class="bar-count">{{ tactic.technique_count }}</span>
             </a>
           {% empty %}
-            <p class="empty">No tactics in this revision.</p>
+            <p class="empty">No behavior refs in this revision.</p>
           {% endfor %}
         </div>
       </section>
@@ -68,36 +67,29 @@
         <h2>Challenge progression</h2>
         <div class="progression">
           {% for step in steps %}
-            {% url 'step-detail' project.slug scenario.slug revision.pk step.path_step as step_url %}
+            {% url 'step-detail' scenario.slug revision.pk step.path_step as step_url %}
             <a class="progress-step" data-tier="{{ step.tier }}" href="{{ step_url }}">
               <b>{{ step.path_step }}. {{ step.surface|default:"Module" }}</b>
               <span>
                 {% if step.estimated_minutes %}{{ step.estimated_minutes }} min{% else %}Unestimated{% endif %}
-                / {{ step.technique_count }} technique{{ step.technique_count|pluralize }}
+                / {{ step.technique_count }} behavior{{ step.technique_count|pluralize }}
               </span>
             </a>
           {% empty %}
             <p class="empty">No modules in this revision.</p>
           {% endfor %}
         </div>
-        {% if integrity_fields %}
-          <div class="integrity" aria-label="Integrity digests">
-            {% for label, value in integrity_fields %}
-              <div class="integrity-row"><span>{{ label }}</span><code>{{ value }}</code></div>
-            {% endfor %}
-          </div>
-        {% endif %}
       </section>
     </div>
   </section>
 
   <section class="view" id="view-techniques" hidden>
-    <h1>Technique projection</h1>
+    <h1>SDL behaviors</h1>
     <p class="subhead">
       Exact relationships, module assignments, evidence boundaries, and planned
       in-world variants.
     </p>
-    <form class="toolbar" method="get" role="search" aria-label="Filter techniques">
+    <form class="toolbar" method="get" role="search" aria-label="Filter behaviors">
       <div class="field field-search">
         <label for="q">Search</label>
         <input id="q" type="search" name="q" value="{{ filters.q }}" placeholder="ID, name, action, evidence">
@@ -112,9 +104,9 @@
         </select>
       </div>
       <div class="field">
-        <label for="tactic-filter">Tactic</label>
+        <label for="tactic-filter">Behavior ref</label>
         <select id="tactic-filter" name="tactic">
-          <option value="">All tactics</option>
+          <option value="">All behavior refs</option>
           {% for tactic in tactic_options %}
             <option value="{{ tactic.tactic_id }}" {% if filters.tactic == tactic.tactic_id %}selected{% endif %}>{{ tactic.name }}</option>
           {% endfor %}
@@ -132,22 +124,22 @@
       <div class="field actions">
         <button type="submit">Filter</button>
         {% if has_filters %}
-          <a class="clear" href="{% url 'revision-overview' project.slug scenario.slug revision.pk %}#techniques" title="Clear filters" aria-label="Clear filters">&times;</a>
+          <a class="clear" href="{% url 'revision-overview' scenario.slug revision.pk %}#techniques" title="Clear filters" aria-label="Clear filters">&times;</a>
         {% endif %}
       </div>
     </form>
     <p class="result-line">
-      <span>Showing {{ match_count }} of {{ counts.techniques }} technique{{ counts.techniques|pluralize }}{% if has_filters %} matching your filters{% endif %}.</span>
-      <span>{{ counts.steps }} modules / {{ counts.tactics }} tactics</span>
+      <span>Showing {{ match_count }} of {{ counts.techniques }} behavior{{ counts.techniques|pluralize }}{% if has_filters %} matching your filters{% endif %}.</span>
+      <span>{{ counts.steps }} modules / {{ counts.tactics }} behavior refs</span>
     </p>
     <div class="table-wrap table-wrap-tall">
       <table>
-        <caption>ATLAS techniques projected for this revision.</caption>
+        <caption>SDL-derived behaviors for this revision.</caption>
         <thead>
           <tr>
             <th scope="col">ID</th>
-            <th scope="col">Technique</th>
-            <th scope="col">Tactics</th>
+            <th scope="col">Behavior</th>
+            <th scope="col">Behavior refs</th>
             <th scope="col">Module</th>
             <th scope="col">Evidence</th>
             <th scope="col">Planned in-world variant</th>
@@ -155,7 +147,7 @@
         </thead>
         <tbody>
           {% for technique in techniques %}
-            {% url 'technique-detail' project.slug scenario.slug revision.pk technique.technique_id as technique_url %}
+            {% url 'technique-detail' scenario.slug revision.pk technique.technique_id as technique_url %}
             <tr class="clickable-row" data-href="{{ technique_url }}">
               <td class="tech-id">
                 <a href="{{ technique_url }}">{{ technique.technique_id }}</a>
@@ -163,19 +155,19 @@
               <td><strong>{{ technique.name }}</strong></td>
               <td>
                 {% for tactic in technique.tactics.all %}
-                  <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
+                  <a class="tag" href="{% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
                 {% endfor %}
               </td>
               <td>
                 {% if technique.step %}
-                  <a class="tier" data-tier="{{ technique.step.tier }}" href="{% url 'step-detail' project.slug scenario.slug revision.pk technique.step.path_step %}">
+                  <a class="tier" data-tier="{{ technique.step.tier }}" href="{% url 'step-detail' scenario.slug revision.pk technique.step.path_step %}">
                     {{ technique.step.path_step }}. {{ technique.step.surface|default:technique.step.path_step }}
                   </a>
                 {% endif %}
               </td>
               <td class="evidence">
                 {% if technique.evidence %}
-                  <a href="{% url 'evidence-detail' project.slug scenario.slug revision.pk technique.evidence.evidence_id %}">{{ technique.evidence.evidence_id }}</a>
+                  <a href="{% url 'evidence-detail' scenario.slug revision.pk technique.evidence.evidence_id %}">{{ technique.evidence.evidence_id }}</a>
                 {% endif %}
               </td>
               <td class="planned">
@@ -183,13 +175,13 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="empty">No techniques match your filters.</td></tr>
+            <tr><td colspan="6" class="empty">No behaviors match your filters.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
     {% if page.paginator.num_pages > 1 %}
-      <nav class="pager" aria-label="Techniques pages">
+      <nav class="pager" aria-label="Behavior pages">
         {% if page.has_previous %}
           <a rel="prev" href="?page={{ page.previous_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}#techniques">Previous</a>
         {% endif %}
@@ -204,12 +196,12 @@
   <section class="view" id="view-modules" hidden>
     <h1>Challenge modules</h1>
     <p class="subhead">
-      Progression, behavior joins, evidence, outcomes, and technique allocation.
+      Progression, behavior joins, evidence, outcomes, and behavior allocation.
       {% if total_minutes %}Total estimated catalog time: {{ total_minutes }} minutes.{% endif %}
     </p>
     <div class="module-grid">
       {% for step in steps %}
-        {% url 'step-detail' project.slug scenario.slug revision.pk step.path_step as step_url %}
+        {% url 'step-detail' scenario.slug revision.pk step.path_step as step_url %}
         <article class="module clickable-card" data-tier="{{ step.tier }}" data-href="{{ step_url }}">
           <div class="module-head">
             <div>
@@ -226,17 +218,17 @@
             <dt>Evidence</dt>
             <dd>
               {% for evidence in step.evidence_list %}
-                <a class="evidence-chip" href="{% url 'evidence-detail' project.slug scenario.slug revision.pk evidence.evidence_id %}">{{ evidence.evidence_id }}</a>
+                <a class="evidence-chip" href="{% url 'evidence-detail' scenario.slug revision.pk evidence.evidence_id %}">{{ evidence.evidence_id }}</a>
               {% empty %}—{% endfor %}
             </dd>
-            <dt>Tactics</dt>
+            <dt>Behavior refs</dt>
             <dd>
               {% for tactic in step.tactic_list %}
-                <a class="tag" href="{% url 'tactic-detail' project.slug scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
+                <a class="tag" href="{% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.name }}</a>
               {% empty %}—{% endfor %}
             </dd>
           </dl>
-          <div class="module-techniques">{{ step.technique_count }} technique-specific variant{{ step.technique_count|pluralize }}</div>
+          <div class="module-techniques">{{ step.technique_count }} behavior-specific variant{{ step.technique_count|pluralize }}</div>
         </article>
       {% empty %}
         <p class="empty">No modules in this revision.</p>

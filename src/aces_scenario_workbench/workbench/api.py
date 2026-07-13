@@ -1,17 +1,43 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from . import authz
 from .ingest import ProjectionError, import_projection, parse_projection
-from .models import Project, Role
+from .models import (
+    ActivityEvent,
+    Challenge,
+    Comment,
+    Decision,
+    DecisionType,
+    Evidence,
+    ObjectType,
+    Revision,
+    Role,
+    Scenario,
+    Step,
+    Tactic,
+    Technique,
+)
 
 _ALLOWED_ROLES = {Role.AUTHOR, Role.ADMINISTRATOR}
+_COMMENTABLE_OBJECT_TYPES = {ObjectType.CHALLENGE, ObjectType.TECHNIQUE}
+_DECISION_OBJECT_TYPES = {ObjectType.CHALLENGE}
+_OBJECT_LOOKUPS = {
+    ObjectType.CHALLENGE: (Challenge, "flag_id"),
+    ObjectType.EVIDENCE: (Evidence, "evidence_id"),
+    ObjectType.STEP: (Step, "path_step"),
+    ObjectType.TACTIC: (Tactic, "tactic_id"),
+    ObjectType.TECHNIQUE: (Technique, "technique_id"),
+}
 
 
 class UploadError(Exception):
@@ -31,19 +57,491 @@ def _read_projection(request: HttpRequest) -> dict[str, Any]:
         raise UploadError(str(exc), 400) from exc
 
 
+def _read_json_object(request: HttpRequest) -> dict[str, Any]:
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        payload = None
+    if not isinstance(payload, dict):
+        raise UploadError("Expected a JSON object.", 400)
+    return payload
+
+
+def _object_exists(revision: Revision, object_type: str, object_stable_id: str) -> bool:
+    lookup = _OBJECT_LOOKUPS.get(object_type)
+    if lookup is None:
+        return False
+    model, field = lookup
+    return model.objects.filter(revision=revision, **{field: object_stable_id}).exists()
+
+
+def _validate_object_mutation(
+    user: object,
+    revision: Revision,
+    object_type: str,
+    object_stable_id: str,
+    *,
+    allowed_types: set[str],
+    permission_message: str,
+    type_message: str,
+) -> None:
+    if not authz.can_contribute(user, revision.scenario):
+        raise UploadError(permission_message, 403)
+    if object_type not in allowed_types:
+        raise UploadError(type_message, 400)
+    if not _object_exists(revision, object_type, object_stable_id):
+        raise UploadError("Object not found.", 404)
+
+
+def _required_text(payload: dict[str, Any], key: str, message: str) -> str:
+    value = str(payload.get(key, "")).strip()
+    if not value:
+        raise UploadError(message, 400)
+    return value
+
+
+def _record_activity(
+    revision: Revision, actor: object, verb: str, object_type: str, object_stable_id: str
+) -> None:
+    ActivityEvent.objects.create(
+        scenario=revision.scenario,
+        actor=actor,
+        verb=verb,
+        object_type=object_type,
+        object_stable_id=object_stable_id,
+    )
+
+
+def _comment_row(comment: Comment) -> dict[str, object]:
+    return {
+        "id": comment.pk,
+        "objectType": comment.object_type,
+        "objectId": comment.object_stable_id,
+        "body": comment.body,
+        "author": comment.author.get_short_name(),
+        "createdAt": comment.created_at.isoformat(),
+        "updatedAt": comment.updated_at.isoformat(),
+        "edited": False,
+    }
+
+
+def _decision_activity_row(decision: Decision) -> dict[str, object]:
+    return {
+        "id": decision.pk,
+        "objectType": decision.object_type,
+        "objectId": decision.object_stable_id,
+        "decision": decision.get_decision_display(),
+        "rationale": decision.rationale,
+        "author": decision.author.get_short_name(),
+        "createdAt": decision.created_at.isoformat(),
+    }
+
+
 @login_required
 @require_POST
 def upload_revision(request: HttpRequest, slug: str) -> HttpResponse:
-    """Ingest a projection uploaded for a project (author/administrator only)."""
-    project = get_object_or_404(Project, slug=slug)
-    if authz.user_role(request.user, project) not in _ALLOWED_ROLES:
+    """Ingest a legacy projection uploaded for a scenario (author/administrator only)."""
+    scenario = get_object_or_404(Scenario, slug=slug)
+    if authz.user_role(request.user, scenario) not in _ALLOWED_ROLES:
         return JsonResponse({"detail": "You do not have permission to upload."}, status=403)
     try:
         data = _read_projection(request)
     except UploadError as exc:
         return JsonResponse({"detail": exc.detail}, status=exc.status)
-    revision, created = import_projection(project, data)
+    revision, created = import_projection(scenario, data)
     return JsonResponse(
         {"revision": revision.pk, "created": created, "mapping_id": revision.mapping_id},
         status=201 if created else 200,
     )
+
+
+@login_required
+@require_GET
+def current_user(request: HttpRequest) -> JsonResponse:
+    return JsonResponse(
+        {
+            "email": request.user.email,
+            "displayName": request.user.get_short_name(),
+            "isStaff": request.user.is_staff,
+        }
+    )
+
+
+@login_required
+@require_GET
+def scenario_list(request: HttpRequest) -> JsonResponse:
+    scenarios = (
+        Scenario.objects.filter(memberships__user=request.user)
+        .annotate(revision_count=Count("revisions", distinct=True))
+        .prefetch_related("memberships")
+    )
+    return JsonResponse(
+        {"scenarios": [_scenario_row(scenario, request.user) for scenario in scenarios]}
+    )
+
+
+@login_required
+@require_GET
+def scenario_detail(request: HttpRequest, slug: str) -> JsonResponse:
+    scenario = get_object_or_404(
+        Scenario.objects.annotate(
+            revision_count=Count("revisions", distinct=True)
+        ).prefetch_related(
+            "memberships",
+            "revisions",
+            "revisions__steps",
+            "revisions__techniques",
+            "revisions__evidence",
+            "revisions__challenges",
+            "revisions__comments",
+            "revisions__decisions",
+        ),
+        slug=slug,
+        memberships__user=request.user,
+    )
+    return JsonResponse(
+        {
+            "scenario": _scenario_row(scenario, request.user),
+            "revisions": [_revision_row(revision) for revision in scenario.revisions.all()],
+        }
+    )
+
+
+@login_required
+@require_GET
+def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
+    revision = get_object_or_404(
+        Revision.objects.select_related("scenario").prefetch_related(
+            "steps",
+            "steps__techniques",
+            "steps__techniques__evidence",
+            "techniques",
+            "techniques__tactics",
+            "techniques__evidence",
+            "evidence",
+            "evidence__techniques",
+            "challenges",
+            "challenges__step",
+            "challenges__techniques",
+            "challenges__evidence_requirements",
+            "challenges__evidence_requirements__evidence",
+            "comments",
+            "comments__author",
+            "decisions",
+            "decisions__author",
+        ),
+        pk=revision_pk,
+        scenario__memberships__user=request.user,
+    )
+    comment_counts = _anchor_counts(revision.comments.all())
+    decision_counts = _anchor_counts(revision.decisions.all())
+    return JsonResponse(
+        {
+            "id": revision.pk,
+            "label": revision.label,
+            "scenario": {
+                "slug": revision.scenario.slug,
+                "name": revision.scenario.name,
+                "description": revision.scenario.description,
+            },
+            "framework": _framework_label(revision),
+            "createdAt": revision.created_at.isoformat(),
+            "summary": _revision_summary(revision),
+            "schedule": _metadata_dict(revision.metadata, "schedule"),
+            "scoring": _metadata_dict(revision.metadata, "scoring"),
+            "environment": _metadata_dict(revision.metadata, "environment"),
+            "telemetry": _metadata_dict(revision.metadata, "telemetry"),
+            "topology": _metadata_dict(revision.metadata, "topology"),
+            "modules": [
+                _module_row(step, comment_counts, decision_counts) for step in revision.steps.all()
+            ],
+            "techniques": [
+                _technique_row(technique, comment_counts, decision_counts)
+                for technique in revision.techniques.all()
+            ],
+            "evidence": [
+                _evidence_row(evidence, comment_counts, decision_counts)
+                for evidence in revision.evidence.all()
+            ],
+            "challenges": [
+                _challenge_row(challenge, comment_counts, decision_counts)
+                for challenge in revision.challenges.all()
+            ],
+            "comments": [_comment_row(comment) for comment in revision.comments.all()],
+            "decisions": [
+                _decision_activity_row(decision) for decision in revision.decisions.all()
+            ],
+        }
+    )
+
+
+@login_required
+@require_POST
+def post_object_comment(
+    request: HttpRequest, revision_pk: int, object_type: str, object_stable_id: str
+) -> JsonResponse:
+    """Add a SPA comment to a supported revision object."""
+    revision = get_object_or_404(
+        Revision.objects.select_related("scenario"),
+        pk=revision_pk,
+        scenario__memberships__user=request.user,
+    )
+    try:
+        _validate_object_mutation(
+            request.user,
+            revision,
+            object_type,
+            object_stable_id,
+            allowed_types=_COMMENTABLE_OBJECT_TYPES,
+            permission_message="You do not have permission to comment.",
+            type_message="Comments are not supported for this object type.",
+        )
+        payload = _read_json_object(request)
+        body = _required_text(payload, "body", "Comment body is required.")
+    except UploadError as exc:
+        return JsonResponse({"detail": exc.detail}, status=exc.status)
+    comment = Comment.objects.create(
+        revision=revision,
+        object_type=object_type,
+        object_stable_id=object_stable_id,
+        author=request.user,
+        body=body,
+    )
+    _record_activity(revision, request.user, "commented", object_type, object_stable_id)
+    return JsonResponse({"comment": _comment_row(comment)}, status=201)
+
+
+@login_required
+@require_POST
+def post_object_decision(
+    request: HttpRequest, revision_pk: int, object_type: str, object_stable_id: str
+) -> JsonResponse:
+    """Record a SPA decision on a supported revision object."""
+    revision = get_object_or_404(
+        Revision.objects.select_related("scenario"),
+        pk=revision_pk,
+        scenario__memberships__user=request.user,
+    )
+    try:
+        _validate_object_mutation(
+            request.user,
+            revision,
+            object_type,
+            object_stable_id,
+            allowed_types=_DECISION_OBJECT_TYPES,
+            permission_message="You do not have permission to record decisions.",
+            type_message="Decisions are only supported for challenges.",
+        )
+        payload = _read_json_object(request)
+        decision_value = _required_text(payload, "decision", "Decision is not valid.")
+    except UploadError as exc:
+        return JsonResponse({"detail": exc.detail}, status=exc.status)
+    if decision_value not in DecisionType.values:
+        return JsonResponse({"detail": "Decision is not valid."}, status=400)
+    decision = Decision.objects.create(
+        revision=revision,
+        object_type=object_type,
+        object_stable_id=object_stable_id,
+        author=request.user,
+        decision=decision_value,
+        rationale=str(payload.get("rationale", "")).strip(),
+    )
+    _record_activity(
+        revision,
+        request.user,
+        f"recorded decision {decision_value}",
+        object_type,
+        object_stable_id,
+    )
+    return JsonResponse({"decision": _decision_activity_row(decision)}, status=201)
+
+
+def _scenario_row(scenario: Scenario, user: object) -> dict[str, object]:
+    membership = next(
+        (membership for membership in scenario.memberships.all() if membership.user_id == user.pk),
+        None,
+    )
+    return {
+        "slug": scenario.slug,
+        "name": scenario.name,
+        "description": scenario.description,
+        "role": membership.get_role_display() if membership else "",
+        "revisionCount": getattr(scenario, "revision_count", 0),
+        "updatedAt": scenario.updated_at.isoformat(),
+    }
+
+
+def _revision_row(revision: Revision) -> dict[str, object]:
+    return {
+        "id": revision.pk,
+        "label": revision.label,
+        "packVersion": revision.pack_version,
+        "framework": _framework_label(revision),
+        "createdAt": revision.created_at.isoformat(),
+        "updatedAt": revision.updated_at.isoformat(),
+        "moduleCount": revision.steps.count(),
+        "techniqueCount": revision.techniques.count(),
+        "evidenceCount": revision.evidence.count(),
+        "challengeCount": revision.challenges.count(),
+        "commentCount": revision.comments.count(),
+        "decisionCount": revision.decisions.count(),
+    }
+
+
+def _framework_label(revision: Revision) -> str:
+    return " ".join(part for part in (revision.framework_name, revision.framework_release) if part)
+
+
+def _anchor_counts(items: Iterable[Any]) -> dict[tuple[str, str], int]:
+    counts: dict[tuple[str, str], int] = {}
+    for item in items:
+        key = (item.object_type, item.object_stable_id)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _metadata_dict(metadata: dict[str, object], key: str) -> dict[str, object]:
+    value = metadata.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _revision_summary(revision: Revision) -> dict[str, object]:
+    total_minutes = sum(
+        step.estimated_minutes or 0 for step in revision.steps.all() if step.estimated_minutes
+    )
+    implemented = sum(1 for challenge in revision.challenges.all() if challenge.implemented)
+    challenge_count = revision.challenges.count()
+    return {
+        "totalMinutes": total_minutes,
+        "moduleCount": revision.steps.count(),
+        "techniqueCount": revision.techniques.count(),
+        "evidenceCount": revision.evidence.count(),
+        "challengeCount": challenge_count,
+        "implementedChallengeCount": implemented,
+        "plannedChallengeCount": challenge_count - implemented,
+    }
+
+
+def _module_row(
+    step: Step,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.STEP, step.path_step)
+    evidence_ids = {
+        technique.evidence_id for technique in step.techniques.all() if technique.evidence_id
+    }
+    return {
+        "id": step.path_step,
+        "name": step.surface or f"Module {step.path_step}",
+        "behaviorSpecification": step.behavior_specification,
+        "tier": step.tier,
+        "objective": step.objective,
+        "minutes": step.estimated_minutes,
+        "flagOutcome": step.flag_outcome,
+        "justification": step.justification,
+        "techniqueCount": step.techniques.count(),
+        "evidenceCount": len(evidence_ids),
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _technique_row(
+    technique: Technique,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.TECHNIQUE, technique.technique_id)
+    return {
+        "id": technique.technique_id,
+        "name": technique.name,
+        "module": technique.step.path_step if technique.step else "",
+        "tactics": [tactic.name for tactic in technique.tactics.all()],
+        "evidence": technique.evidence.evidence_id if technique.evidence else "",
+        "surface": technique.surface,
+        "relationship": technique.relationship,
+        "coverageStatus": technique.coverage_status,
+        "plannedAction": technique.planned_action,
+        "rationale": technique.rationale,
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _evidence_row(
+    evidence: Evidence,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.EVIDENCE, evidence.evidence_id)
+    return {
+        "id": evidence.evidence_id,
+        "description": evidence.description,
+        "techniqueCount": evidence.techniques.count(),
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _challenge_row(
+    challenge: Challenge,
+    comment_counts: dict[tuple[str, str], int],
+    decision_counts: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    key = (ObjectType.CHALLENGE, challenge.flag_id)
+    metadata = challenge.metadata if isinstance(challenge.metadata, dict) else {}
+    return {
+        "id": challenge.flag_id,
+        "flagId": challenge.flag_id,
+        "outcome": challenge.outcome_id,
+        "title": challenge.title,
+        "question": challenge.question,
+        "category": challenge.category,
+        "difficulty": challenge.difficulty,
+        "points": challenge.points,
+        "hints": challenge.hints,
+        "implemented": challenge.implemented,
+        "status": "Implemented" if challenge.implemented else "Planned",
+        "runtimeEntrypoint": challenge.runtime_entrypoint,
+        "sourcePath": challenge.source_path,
+        "module": challenge.step.path_step if challenge.step else "",
+        "moduleName": challenge.step.surface if challenge.step else "",
+        "techniqueIds": [technique.technique_id for technique in challenge.techniques.all()],
+        "canonicalSteps": _string_list(metadata.get("canonical_steps")),
+        "readiness": _object_dict(metadata.get("readiness")),
+        "scoring": _object_dict(metadata.get("scoring")),
+        "alternateAwards": _list_of_dicts(metadata.get("alternate_awards")),
+        "bundles": _list_of_dicts(metadata.get("bundles")),
+        "delivery": _object_dict(metadata.get("delivery")),
+        "evidenceRequirements": [
+            {
+                "evidenceId": requirement.evidence_key,
+                "predicate": requirement.predicate,
+                "sourcePath": requirement.source_path,
+                "eventId": requirement.event_id,
+                "eventKind": requirement.event_kind,
+                "sourceService": requirement.source_service,
+                "sourceAsset": requirement.source_asset,
+                "freshnessSeconds": requirement.freshness_seconds,
+                "resetOwner": requirement.reset_owner,
+                "fields": requirement.fields,
+                "proofFields": requirement.proof_fields,
+            }
+            for requirement in challenge.evidence_requirements.all()
+        ],
+        "commentCount": comment_counts.get(key, 0),
+        "decisionCount": decision_counts.get(key, 0),
+    }
+
+
+def _object_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_of_dicts(value: object) -> list[dict[str, object]]:
+    return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
+
+
+def _string_list(value: object) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []

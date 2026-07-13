@@ -11,7 +11,6 @@ from aces_scenario_workbench.workbench.models import (
     Evidence,
     Membership,
     ObjectType,
-    Project,
     ReviewState,
     ReviewStatus,
     Revision,
@@ -32,8 +31,7 @@ def user(db):
 
 @pytest.fixture
 def revision(db):
-    project = Project.objects.create(slug="demo", name="Demo Project")
-    scenario = Scenario.objects.create(project=project, slug="sample", name="Sample Scenario")
+    scenario = Scenario.objects.create(slug="sample", name="Sample Scenario")
     return Revision.objects.create(
         scenario=scenario,
         label="2026-06",
@@ -42,18 +40,17 @@ def revision(db):
     )
 
 
-def test_project_scenario_revision_str(revision):
-    assert str(revision.scenario.project) == "Demo Project"
+def test_scenario_revision_str(revision):
     assert str(revision.scenario) == "Sample Scenario"
     assert str(revision) == "Sample Scenario @ 2026-06"
 
 
 def test_membership_str_and_uniqueness(user, revision):
-    project = revision.scenario.project
-    membership = Membership.objects.create(project=project, user=user, role=Role.AUTHOR)
-    assert str(membership) == f"{user} in {project} (Author)"
+    scenario = revision.scenario
+    membership = Membership.objects.create(scenario=scenario, user=user, role=Role.AUTHOR)
+    assert str(membership) == f"{user} in {scenario} (Author)"
     with pytest.raises(IntegrityError):
-        Membership.objects.create(project=project, user=user, role=Role.REVIEWER)
+        Membership.objects.create(scenario=scenario, user=user, role=Role.REVIEWER)
 
 
 def test_atlas_objects_and_relations(revision):
@@ -113,9 +110,7 @@ def test_collaboration_models_str(user, revision):
     )
     assert str(state) == "technique:AML.T0000 = accepted"
 
-    event = ActivityEvent.objects.create(
-        project=revision.scenario.project, actor=user, verb="commented"
-    )
+    event = ActivityEvent.objects.create(scenario=revision.scenario, actor=user, verb="commented")
     assert str(event) == f"{user} commented"
 
 

@@ -31,7 +31,7 @@ Work through this before exposing an instance to the internet. See
 - [ ] Migrations are applied (`aces-workbench migrate`).
 - [ ] The first administrator exists (`aces-workbench createadmin`).
 - [ ] The configured Django admin path is restricted to administrators.
-- [ ] Sign in over HTTPS, create a project, and send yourself an invitation to
+- [ ] Sign in over HTTPS, create a scenario, and send yourself an invitation to
       confirm email delivery end to end.
 
 ## Operate
