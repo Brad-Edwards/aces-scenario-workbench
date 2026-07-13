@@ -1,9 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { getRevision, type RevisionWorkspace } from "@/api/client";
-import { Badge, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import {
+  getRevision,
+  postObjectComment,
+  postObjectDecision,
+  type DecisionValue,
+  type RevisionWorkspace,
+} from "@/api/client";
+import { Badge, Button, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 import {
   challengePath,
   evidencePath,
@@ -167,7 +173,13 @@ function TechniqueDetail({
           {evidence ? <EvidenceSummaryCard revision={revision} evidence={evidence} /> : null}
           <RelatedChallengesTable revision={revision} challenges={challenges} title="Related challenges" />
         </div>
-        <ActivityPanel revision={revision} objectType="technique" objectId={technique.id} />
+        <ActivityPanel
+          revision={revision}
+          objectType="technique"
+          objectId={technique.id}
+          allowCommentForm
+          showDecisions={false}
+        />
       </div>
     </>
   );
@@ -287,7 +299,13 @@ function ChallengeDetail({
           <RelatedTechniquesTable revision={revision} techniques={techniques} title="Related TTPs" />
           <RelatedEvidenceTable revision={revision} evidence={evidence} title="Required evidence objects" />
         </div>
-        <ActivityPanel revision={revision} objectType="challenge" objectId={challenge.id} />
+        <ActivityPanel
+          revision={revision}
+          objectType="challenge"
+          objectId={challenge.id}
+          allowCommentForm
+          allowDecisionForm
+        />
       </div>
     </>
   );
@@ -565,25 +583,134 @@ function ActivityPanel({
   revision,
   objectType,
   objectId,
+  allowCommentForm = false,
+  allowDecisionForm = false,
+  showDecisions = true,
 }: Readonly<{
   revision: RevisionWorkspace;
   objectType: string;
   objectId: string;
+  allowCommentForm?: boolean;
+  allowDecisionForm?: boolean;
+  showDecisions?: boolean;
 }>) {
+  const queryClient = useQueryClient();
+  const [commentBody, setCommentBody] = useState("");
+  const [decisionValue, setDecisionValue] = useState<DecisionValue>("accept");
+  const [decisionRationale, setDecisionRationale] = useState("");
   const comments = revision.comments.filter(
     (comment) => comment.objectType === objectType && comment.objectId === objectId,
   );
-  const decisions = revision.decisions.filter(
-    (decision) => decision.objectType === objectType && decision.objectId === objectId,
-  );
+  const decisions = showDecisions
+    ? revision.decisions.filter(
+        (decision) => decision.objectType === objectType && decision.objectId === objectId,
+      )
+    : [];
+  const title = showDecisions ? "Comments and decisions" : "Comments";
+
+  const commentMutation = useMutation({
+    mutationFn: () => postObjectComment(revision.id, objectType, objectId, commentBody),
+    onSuccess: async () => {
+      setCommentBody("");
+      await queryClient.invalidateQueries({ queryKey: ["revision", String(revision.id)] });
+    },
+  });
+
+  const decisionMutation = useMutation({
+    mutationFn: () =>
+      postObjectDecision(revision.id, objectType, objectId, decisionValue, decisionRationale),
+    onSuccess: async () => {
+      setDecisionValue("accept");
+      setDecisionRationale("");
+      await queryClient.invalidateQueries({ queryKey: ["revision", String(revision.id)] });
+    },
+  });
+
+  function submitComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!commentBody.trim() || commentMutation.isPending) return;
+    commentMutation.mutate();
+  }
+
+  function submitDecision(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (decisionMutation.isPending) return;
+    decisionMutation.mutate();
+  }
 
   return (
-    <Card className="p-6">
-      <h2 className="text-sm font-medium">Comments and decisions</h2>
+    <Card className="space-y-5 p-6">
+      <h2 className="text-sm font-medium">{title}</h2>
+      {allowCommentForm ? (
+        <form onSubmit={submitComment} className="space-y-3">
+          <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground" htmlFor="comment">
+            Add comment
+          </label>
+          <textarea
+            id="comment"
+            value={commentBody}
+            onChange={(event) => setCommentBody(event.target.value)}
+            rows={4}
+            placeholder="Add a note for this item…"
+            className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+          />
+          {commentMutation.isError ? (
+            <p className="text-sm text-destructive">{commentMutation.error.message}</p>
+          ) : null}
+          <Button type="submit" disabled={!commentBody.trim() || commentMutation.isPending}>
+            {commentMutation.isPending ? "Saving…" : "Add comment"}
+          </Button>
+        </form>
+      ) : null}
+      {allowDecisionForm ? (
+        <form onSubmit={submitDecision} className="space-y-3 border-t border-border pt-5">
+          <div>
+            <label
+              className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
+              htmlFor="decision"
+            >
+              Vote / decision
+            </label>
+            <select
+              id="decision"
+              value={decisionValue}
+              onChange={(event) => setDecisionValue(event.target.value as DecisionValue)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30"
+            >
+              <option value="accept">Accept</option>
+              <option value="needs-change">Needs change</option>
+              <option value="resolve">Resolve</option>
+              <option value="reopen">Reopen</option>
+            </select>
+          </div>
+          <div>
+            <label
+              className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
+              htmlFor="decision-rationale"
+            >
+              Rationale
+            </label>
+            <textarea
+              id="decision-rationale"
+              value={decisionRationale}
+              onChange={(event) => setDecisionRationale(event.target.value)}
+              rows={3}
+              placeholder="Optional context for the decision…"
+              className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+          {decisionMutation.isError ? (
+            <p className="text-sm text-destructive">{decisionMutation.error.message}</p>
+          ) : null}
+          <Button type="submit" disabled={decisionMutation.isPending}>
+            {decisionMutation.isPending ? "Recording…" : "Record decision"}
+          </Button>
+        </form>
+      ) : null}
       {comments.length === 0 && decisions.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">No activity is attached to this object yet.</p>
+        <p className="text-sm text-muted-foreground">No activity is attached to this object yet.</p>
       ) : (
-        <div className="mt-4 space-y-4">
+        <div className="space-y-4 border-t border-border pt-5">
           {comments.map((comment) => (
             <ActivityItem key={`comment-${comment.id}`} label="Comment" createdAt={comment.createdAt}>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">{comment.body}</p>

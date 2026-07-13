@@ -33,6 +33,16 @@ urlpatterns = [
         name="api-revision-workspace",
     ),
     path(
+        "api/app/revisions/<int:revision_pk>/objects/<str:object_type>/<str:object_stable_id>/comments",
+        api.post_object_comment,
+        name="api-object-comment",
+    ),
+    path(
+        "api/app/revisions/<int:revision_pk>/objects/<str:object_type>/<str:object_stable_id>/decisions",
+        api.post_object_decision,
+        name="api-object-decision",
+    ),
+    path(
         "api/scenarios/<slug:slug>/revisions",
         api.upload_revision,
         name="api-upload-revision",

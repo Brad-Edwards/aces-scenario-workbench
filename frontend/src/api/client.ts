@@ -123,6 +123,10 @@ export type RevisionWorkspace = {
   }>;
 };
 
+export type DecisionValue = "accept" | "needs-change" | "resolve" | "reopen";
+export type RevisionComment = RevisionWorkspace["comments"][number];
+export type RevisionDecision = RevisionWorkspace["decisions"][number];
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path, {
     credentials: "same-origin",
@@ -132,6 +136,45 @@ async function getJson<T>(path: string): Promise<T> {
     throw new Error(`Request failed (${response.status})`);
   }
   return response.json() as Promise<T>;
+}
+
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  const csrfToken = getCookie("csrftoken");
+  const response = await fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`;
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (body.detail) detail = body.detail;
+    } catch {
+      // Keep the status-only fallback.
+    }
+    throw new Error(detail);
+  }
+  return response.json() as Promise<T>;
+}
+
+function getCookie(name: string) {
+  const match = document.cookie
+    .split("; ")
+    .find((candidate) => candidate.startsWith(`${encodeURIComponent(name)}=`));
+  if (!match) return "";
+  return decodeURIComponent(match.split("=").slice(1).join("="));
+}
+
+function objectActivityPath(revisionId: string | number, objectType: string, objectId: string, suffix: string) {
+  return `/api/app/revisions/${encodeURIComponent(String(revisionId))}/objects/${encodeURIComponent(
+    objectType,
+  )}/${encodeURIComponent(objectId)}/${suffix}`;
 }
 
 export function getPrincipal() {
@@ -148,4 +191,29 @@ export function getScenario(slug: string) {
 
 export function getRevision(id: string) {
   return getJson<RevisionWorkspace>(`/api/app/revisions/${encodeURIComponent(id)}`);
+}
+
+export function postObjectComment(
+  revisionId: string | number,
+  objectType: string,
+  objectId: string,
+  body: string,
+) {
+  return postJson<{ comment: RevisionComment }>(
+    objectActivityPath(revisionId, objectType, objectId, "comments"),
+    { body },
+  );
+}
+
+export function postObjectDecision(
+  revisionId: string | number,
+  objectType: string,
+  objectId: string,
+  decision: DecisionValue,
+  rationale: string,
+) {
+  return postJson<{ decision: RevisionDecision }>(
+    objectActivityPath(revisionId, objectType, objectId, "decisions"),
+    { decision, rationale },
+  );
 }

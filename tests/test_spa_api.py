@@ -140,6 +140,116 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert "project" not in json.dumps(payload).lower()
 
 
+def test_spa_comment_endpoint_allows_challenges_and_ttps(client, spa_workspace):
+    _, _, revision, member, _ = spa_workspace
+    client.force_login(member)
+
+    challenge_response = client.post(
+        reverse(
+            "api-object-comment",
+            args=[revision.pk, ObjectType.CHALLENGE, "flag-recon"],
+        ),
+        data=json.dumps({"body": "Challenge evidence needs a receipt example."}),
+        content_type="application/json",
+    )
+    technique_response = client.post(
+        reverse(
+            "api-object-comment",
+            args=[revision.pk, ObjectType.TECHNIQUE, "AML.T0000"],
+        ),
+        data=json.dumps({"body": "Tie this TTP back to the implemented path."}),
+        content_type="application/json",
+    )
+
+    assert challenge_response.status_code == 201
+    assert technique_response.status_code == 201
+    assert Comment.objects.filter(
+        revision=revision,
+        object_type=ObjectType.CHALLENGE,
+        object_stable_id="flag-recon",
+        body="Challenge evidence needs a receipt example.",
+    ).exists()
+    assert Comment.objects.filter(
+        revision=revision,
+        object_type=ObjectType.TECHNIQUE,
+        object_stable_id="AML.T0000",
+        body="Tie this TTP back to the implemented path.",
+    ).exists()
+
+    workspace = client.get(reverse("api-revision-workspace", args=[revision.pk])).json()
+    challenge = next(item for item in workspace["challenges"] if item["id"] == "flag-recon")
+    technique = next(item for item in workspace["techniques"] if item["id"] == "AML.T0000")
+    assert challenge["commentCount"] == 1
+    assert technique["commentCount"] == 1
+
+
+def test_spa_decision_endpoint_allows_challenges_only(client, spa_workspace):
+    _, _, revision, member, _ = spa_workspace
+    client.force_login(member)
+
+    challenge_response = client.post(
+        reverse(
+            "api-object-decision",
+            args=[revision.pk, ObjectType.CHALLENGE, "flag-recon"],
+        ),
+        data=json.dumps(
+            {"decision": DecisionType.ACCEPT, "rationale": "Evidence contract is good."}
+        ),
+        content_type="application/json",
+    )
+    technique_response = client.post(
+        reverse(
+            "api-object-decision",
+            args=[revision.pk, ObjectType.TECHNIQUE, "AML.T0000"],
+        ),
+        data=json.dumps(
+            {"decision": DecisionType.ACCEPT, "rationale": "Should not be accepted here."}
+        ),
+        content_type="application/json",
+    )
+
+    assert challenge_response.status_code == 201
+    assert challenge_response.json()["decision"]["decision"] == "Accept"
+    assert Decision.objects.filter(
+        revision=revision,
+        object_type=ObjectType.CHALLENGE,
+        object_stable_id="flag-recon",
+        decision=DecisionType.ACCEPT,
+    ).exists()
+    assert technique_response.status_code == 400
+    assert not Decision.objects.filter(
+        revision=revision,
+        object_type=ObjectType.TECHNIQUE,
+        object_stable_id="AML.T0000",
+        decision=DecisionType.ACCEPT,
+    ).exists()
+
+
+def test_spa_collaboration_endpoints_reject_non_members(client, spa_workspace):
+    _, _, revision, _, outsider = spa_workspace
+    client.force_login(outsider)
+
+    comment_response = client.post(
+        reverse(
+            "api-object-comment",
+            args=[revision.pk, ObjectType.CHALLENGE, "flag-recon"],
+        ),
+        data=json.dumps({"body": "Not allowed."}),
+        content_type="application/json",
+    )
+    decision_response = client.post(
+        reverse(
+            "api-object-decision",
+            args=[revision.pk, ObjectType.CHALLENGE, "flag-recon"],
+        ),
+        data=json.dumps({"decision": DecisionType.ACCEPT}),
+        content_type="application/json",
+    )
+
+    assert comment_response.status_code == 404
+    assert decision_response.status_code == 404
+
+
 def test_spa_api_rejects_non_members(client, spa_workspace):
     scenario, _, revision, _, outsider = spa_workspace
     client.force_login(outsider)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
@@ -10,9 +11,32 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import authz
 from .ingest import ProjectionError, import_projection, parse_projection
-from .models import Challenge, Evidence, ObjectType, Revision, Role, Scenario, Step, Technique
+from .models import (
+    ActivityEvent,
+    Challenge,
+    Comment,
+    Decision,
+    DecisionType,
+    Evidence,
+    ObjectType,
+    Revision,
+    Role,
+    Scenario,
+    Step,
+    Tactic,
+    Technique,
+)
 
 _ALLOWED_ROLES = {Role.AUTHOR, Role.ADMINISTRATOR}
+_COMMENTABLE_OBJECT_TYPES = {ObjectType.CHALLENGE, ObjectType.TECHNIQUE}
+_DECISION_OBJECT_TYPES = {ObjectType.CHALLENGE}
+_OBJECT_LOOKUPS = {
+    ObjectType.CHALLENGE: (Challenge, "flag_id"),
+    ObjectType.EVIDENCE: (Evidence, "evidence_id"),
+    ObjectType.STEP: (Step, "path_step"),
+    ObjectType.TACTIC: (Tactic, "tactic_id"),
+    ObjectType.TECHNIQUE: (Technique, "technique_id"),
+}
 
 
 class UploadError(Exception):
@@ -30,6 +54,61 @@ def _read_projection(request: HttpRequest) -> dict[str, Any]:
         return parse_projection(upload.read())
     except ProjectionError as exc:
         raise UploadError(str(exc), 400) from exc
+
+
+def _read_json_object(request: HttpRequest) -> dict[str, Any]:
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        payload = None
+    if not isinstance(payload, dict):
+        raise UploadError("Expected a JSON object.", 400)
+    return payload
+
+
+def _object_exists(revision: Revision, object_type: str, object_stable_id: str) -> bool:
+    lookup = _OBJECT_LOOKUPS.get(object_type)
+    if lookup is None:
+        return False
+    model, field = lookup
+    return model.objects.filter(revision=revision, **{field: object_stable_id}).exists()
+
+
+def _record_activity(
+    revision: Revision, actor: object, verb: str, object_type: str, object_stable_id: str
+) -> None:
+    ActivityEvent.objects.create(
+        scenario=revision.scenario,
+        actor=actor,
+        verb=verb,
+        object_type=object_type,
+        object_stable_id=object_stable_id,
+    )
+
+
+def _comment_row(comment: Comment) -> dict[str, object]:
+    return {
+        "id": comment.pk,
+        "objectType": comment.object_type,
+        "objectId": comment.object_stable_id,
+        "body": comment.body,
+        "author": comment.author.get_short_name(),
+        "createdAt": comment.created_at.isoformat(),
+        "updatedAt": comment.updated_at.isoformat(),
+        "edited": False,
+    }
+
+
+def _decision_activity_row(decision: Decision) -> dict[str, object]:
+    return {
+        "id": decision.pk,
+        "objectType": decision.object_type,
+        "objectId": decision.object_stable_id,
+        "decision": decision.get_decision_display(),
+        "rationale": decision.rationale,
+        "author": decision.author.get_short_name(),
+        "createdAt": decision.created_at.isoformat(),
+    }
 
 
 @login_required
@@ -156,33 +235,93 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
                 _challenge_row(challenge, comment_counts, decision_counts)
                 for challenge in revision.challenges.all()
             ],
-            "comments": [
-                {
-                    "id": comment.pk,
-                    "objectType": comment.object_type,
-                    "objectId": comment.object_stable_id,
-                    "body": comment.body,
-                    "author": comment.author.get_short_name(),
-                    "createdAt": comment.created_at.isoformat(),
-                    "updatedAt": comment.updated_at.isoformat(),
-                    "edited": False,
-                }
-                for comment in revision.comments.all()
-            ],
+            "comments": [_comment_row(comment) for comment in revision.comments.all()],
             "decisions": [
-                {
-                    "id": decision.pk,
-                    "objectType": decision.object_type,
-                    "objectId": decision.object_stable_id,
-                    "decision": decision.get_decision_display(),
-                    "rationale": decision.rationale,
-                    "author": decision.author.get_short_name(),
-                    "createdAt": decision.created_at.isoformat(),
-                }
-                for decision in revision.decisions.all()
+                _decision_activity_row(decision) for decision in revision.decisions.all()
             ],
         }
     )
+
+
+@login_required
+@require_POST
+def post_object_comment(
+    request: HttpRequest, revision_pk: int, object_type: str, object_stable_id: str
+) -> JsonResponse:
+    """Add a SPA comment to a supported revision object."""
+    revision = get_object_or_404(
+        Revision.objects.select_related("scenario"),
+        pk=revision_pk,
+        scenario__memberships__user=request.user,
+    )
+    if not authz.can_contribute(request.user, revision.scenario):
+        return JsonResponse({"detail": "You do not have permission to comment."}, status=403)
+    if object_type not in _COMMENTABLE_OBJECT_TYPES:
+        return JsonResponse(
+            {"detail": "Comments are not supported for this object type."}, status=400
+        )
+    if not _object_exists(revision, object_type, object_stable_id):
+        return JsonResponse({"detail": "Object not found."}, status=404)
+    try:
+        payload = _read_json_object(request)
+    except UploadError as exc:
+        return JsonResponse({"detail": exc.detail}, status=exc.status)
+    body = str(payload.get("body", "")).strip()
+    if not body:
+        return JsonResponse({"detail": "Comment body is required."}, status=400)
+    comment = Comment.objects.create(
+        revision=revision,
+        object_type=object_type,
+        object_stable_id=object_stable_id,
+        author=request.user,
+        body=body,
+    )
+    _record_activity(revision, request.user, "commented", object_type, object_stable_id)
+    return JsonResponse({"comment": _comment_row(comment)}, status=201)
+
+
+@login_required
+@require_POST
+def post_object_decision(
+    request: HttpRequest, revision_pk: int, object_type: str, object_stable_id: str
+) -> JsonResponse:
+    """Record a SPA decision on a supported revision object."""
+    revision = get_object_or_404(
+        Revision.objects.select_related("scenario"),
+        pk=revision_pk,
+        scenario__memberships__user=request.user,
+    )
+    if not authz.can_contribute(request.user, revision.scenario):
+        return JsonResponse(
+            {"detail": "You do not have permission to record decisions."}, status=403
+        )
+    if object_type not in _DECISION_OBJECT_TYPES:
+        return JsonResponse({"detail": "Decisions are only supported for challenges."}, status=400)
+    if not _object_exists(revision, object_type, object_stable_id):
+        return JsonResponse({"detail": "Object not found."}, status=404)
+    try:
+        payload = _read_json_object(request)
+    except UploadError as exc:
+        return JsonResponse({"detail": exc.detail}, status=exc.status)
+    decision_value = str(payload.get("decision", "")).strip()
+    if decision_value not in DecisionType.values:
+        return JsonResponse({"detail": "Decision is not valid."}, status=400)
+    decision = Decision.objects.create(
+        revision=revision,
+        object_type=object_type,
+        object_stable_id=object_stable_id,
+        author=request.user,
+        decision=decision_value,
+        rationale=str(payload.get("rationale", "")).strip(),
+    )
+    _record_activity(
+        revision,
+        request.user,
+        f"recorded decision {decision_value}",
+        object_type,
+        object_stable_id,
+    )
+    return JsonResponse({"decision": _decision_activity_row(decision)}, status=201)
 
 
 def _scenario_row(scenario: Scenario, user: object) -> dict[str, object]:
