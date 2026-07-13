@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from aces_sdl import SDLError, SDLMigrationPolicy, parse_sdl_file
+from aces_sdl import SDLMigrationPolicy, parse_sdl_file
 from django.db import transaction
 
 from .models import (
@@ -48,6 +48,20 @@ CONTRACT_PATHS = {
     "planned_assets": "assets/planned-assets.yaml",
     "affordances": "assets/affordances.yaml",
 }
+SDL_LOCAL_PREFIX = "local:"
+SDL_PARSER_ISSUE = "https://github.com/Brad-Edwards/aces/issues/767"
+SDL_MAPPING_SECTIONS = (
+    "nodes",
+    "infrastructure",
+    "features",
+    "entities",
+    "accounts",
+    "content",
+    "relationships",
+    "agents",
+    "behavior_specifications",
+    "behavior-specifications",
+)
 
 
 class ProjectionError(ValueError):
@@ -134,16 +148,111 @@ def _load_sdl(pack_dir: Path) -> dict[str, Any]:
         if found.is_file():
             try:
                 scenario = parse_sdl_file(found, migration_policy=SDLMigrationPolicy.ACCEPT)
-            except SDLError as exc:
-                fallback = parse_projection(found.read_bytes())
+            except Exception as exc:
+                fallback = _raw_modular_sdl(found)
                 fallback["parser_error"] = str(exc)
-                fallback["parser"] = "yaml-fallback"
+                fallback["parser"] = "raw-sdl-fallback"
+                fallback["parser_issue"] = SDL_PARSER_ISSUE
                 return fallback
             parsed = scenario.model_dump(mode="json")
             parsed["parser"] = "aces-sdl"
             parsed["advisories"] = [str(advisory) for advisory in scenario.advisories]
             return parsed
     return {}
+
+
+def _raw_modular_sdl(root_path: Path) -> dict[str, Any]:
+    """Read a root SDL file plus declared local imports without semantic expansion."""
+    root = parse_projection(root_path.read_bytes())
+    expanded: dict[str, Any] = {
+        key: value for key, value in root.items() if key not in SDL_MAPPING_SECTIONS
+    }
+    expanded["raw_files"] = [
+        {
+            "path": root_path.name,
+            "namespace": "",
+            "section_counts": _sdl_section_counts(root),
+        }
+    ]
+    for section in SDL_MAPPING_SECTIONS:
+        if section in {"behavior-specifications"}:
+            continue
+        section_value = _mapping_any(root, section)
+        if section_value:
+            expanded[section] = dict(section_value)
+
+    seen = {root_path.resolve()}
+    for import_row in _sdl_import_rows(root):
+        _merge_sdl_import(expanded, root_path.parent, import_row, seen)
+
+    if "behavior-specifications" in expanded and "behavior_specifications" not in expanded:
+        expanded["behavior_specifications"] = expanded.pop("behavior-specifications")
+    return expanded
+
+
+def _sdl_import_rows(sdl: dict[str, Any]) -> list[dict[str, Any]]:
+    return [row for row in _sequence(sdl, "imports") if isinstance(row, dict)]
+
+
+def _merge_sdl_import(
+    expanded: dict[str, Any],
+    base_dir: Path,
+    import_row: dict[str, Any],
+    seen: set[Path],
+) -> None:
+    source = _text(import_row, "source")
+    if not source.startswith(SDL_LOCAL_PREFIX):
+        return
+    relative_source = source.removeprefix(SDL_LOCAL_PREFIX)
+    imported_path = (base_dir / relative_source).resolve()
+    if imported_path in seen:
+        return
+    seen.add(imported_path)
+    imported = parse_projection(imported_path.read_bytes())
+    namespace = _text(import_row, "namespace")
+    expanded.setdefault("raw_files", []).append(
+        {
+            "path": relative_source,
+            "namespace": namespace,
+            "section_counts": _sdl_section_counts(imported),
+        }
+    )
+    for section in SDL_MAPPING_SECTIONS:
+        rows = _mapping_any(imported, section)
+        if not rows:
+            continue
+        target_section = (
+            "behavior_specifications" if section == "behavior-specifications" else section
+        )
+        target = expanded.setdefault(target_section, {})
+        if isinstance(target, dict):
+            _merge_sdl_mapping(target, rows, namespace)
+
+    for nested_import in _sdl_import_rows(imported):
+        _merge_sdl_import(expanded, imported_path.parent, nested_import, seen)
+
+
+def _merge_sdl_mapping(
+    target: dict[str, Any],
+    rows: dict[str, Any],
+    namespace: str,
+) -> None:
+    for key, value in rows.items():
+        merged_key = str(key)
+        if merged_key in target and target[merged_key] != value and namespace:
+            merged_key = f"{namespace}.{merged_key}"
+        if merged_key not in target:
+            target[merged_key] = value
+
+
+def _sdl_section_counts(sdl: dict[str, Any]) -> dict[str, int]:
+    return {
+        ("behavior_specifications" if section == "behavior-specifications" else section): len(
+            _mapping_any(sdl, section)
+        )
+        for section in SDL_MAPPING_SECTIONS
+        if _mapping_any(sdl, section)
+    }
 
 
 def parse_projection(raw: bytes) -> dict[str, Any]:
@@ -184,6 +293,7 @@ def _sdl_defines_modules(sdl: object) -> bool:
 def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dict[str, Any]:
     """Adapt SDL behavior specifications into the workbench's revision graph shape."""
     behavior_specs = _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
+    module_specs = _sdl_module_specs(behavior_specs)
     framework = _mapping(projection, "framework")
     steps_by_behavior = {
         _text(row, "aces_behavior_specification"): row
@@ -195,7 +305,7 @@ def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dic
     tactic_ids: set[str] = set()
     techniques = []
 
-    for index, (behavior_id, spec) in enumerate(sorted(behavior_specs.items()), start=1):
+    for index, (behavior_id, spec) in enumerate(sorted(module_specs.items()), start=1):
         spec = spec if isinstance(spec, dict) else {}
         path_step = _path_step_from_behavior_id(behavior_id, index)
         enrichment = steps_by_behavior.get(behavior_id) or steps_by_id.get(path_step, {})
@@ -221,7 +331,7 @@ def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dic
         for ref in refs:
             techniques.append(
                 {
-                    "id": _sdl_technique_id(path_step, ref),
+                    "id": _sdl_technique_id(path_step, ref, behavior_id),
                     "name": _behavior_ref_name(ref),
                     "tactics": [ref],
                     "challenge_step": path_step,
@@ -265,6 +375,28 @@ def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dic
     }
 
 
+def _sdl_module_specs(behavior_specs: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in behavior_specs.items()
+        if not _sdl_challenge_extension(value if isinstance(value, dict) else {})
+    }
+
+
+def _sdl_challenge_specs(behavior_specs: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        key: value
+        for key, value in behavior_specs.items()
+        if isinstance(value, dict) and _sdl_challenge_extension(value)
+    }
+
+
+def _sdl_challenge_extension(spec: dict[str, Any]) -> dict[str, Any]:
+    extensions = _mapping(spec, "extensions")
+    value = extensions.get("x-keplerops:challenge")
+    return value if isinstance(value, dict) else {}
+
+
 def _path_step_from_behavior_id(behavior_id: str, index: int) -> str:
     match = re.search(r"(?:^|-)module-(\d+)", behavior_id)
     if match:
@@ -286,8 +418,16 @@ def _sdl_behavior_refs(spec: dict[str, Any]) -> list[str]:
     )
 
 
-def _sdl_technique_id(path_step: str, behavior_ref: str) -> str:
-    return f"SDL.{path_step}.{behavior_ref}"[:32]
+def _sdl_technique_id(path_step: str, behavior_ref: str, behavior_id: str = "") -> str:
+    base = f"SDL.{path_step}.{behavior_ref}"
+    if len(base) <= 32:
+        return base
+    digest = hashlib.sha1(f"{path_step}:{behavior_id}:{behavior_ref}".encode()).hexdigest()[:8]
+    prefix = f"SDL.{path_step}."
+    suffix = f".{digest}"
+    slug_limit = max(1, 32 - len(prefix) - len(suffix))
+    slug = behavior_ref[:slug_limit].rstrip("-_.") or "behavior"
+    return f"{prefix}{slug}{suffix}"
 
 
 def _behavior_ref_name(behavior_ref: str) -> str:
@@ -489,9 +629,10 @@ def _sdl_topology_metadata(sdl: object, topology: object) -> dict[str, Any]:
     sdl = sdl if isinstance(sdl, dict) else {}
     topology = topology if isinstance(topology, dict) else {}
     nodes = _mapping(sdl, "nodes")
+    infrastructure = _mapping(sdl, "infrastructure")
+    relationships = _mapping(sdl, "relationships")
     entities = _mapping(sdl, "entities")
     agents = _mapping(sdl, "agents")
-    behavior_specs = _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
     assets = _entries(topology, "assets")
     services = _entries(topology, "services")
     assets_by_id = {_text(row, "id"): row for row in assets if _text(row, "id")}
@@ -505,20 +646,26 @@ def _sdl_topology_metadata(sdl: object, topology: object) -> dict[str, Any]:
         "name": _text(sdl, "name"),
         "version": _text(sdl, "version"),
         "description": _text(sdl, "description"),
+        "infrastructure": [
+            _sdl_infrastructure_row(key, value, nodes)
+            for key, value in sorted(infrastructure.items())
+        ],
+        "relationships": [
+            _sdl_relationship_row(key, value) for key, value in sorted(relationships.items())
+        ],
         "nodes": [
             _sdl_node_row(key, value, assets_by_id, services_by_id)
             for key, value in sorted(nodes.items())
         ],
         "entities": [_sdl_entity_row(key, value) for key, value in sorted(entities.items())],
         "agents": [_sdl_agent_row(key, value) for key, value in sorted(agents.items())],
-        "behavior_specs": [
-            _sdl_behavior_spec_row(key, value) for key, value in sorted(behavior_specs.items())
-        ],
         "zones": [_zone_row(row) for row in _entries(topology, "zones")],
         "networks": [_network_row(row) for row in _entries(topology, "networks")],
-        "links": _sdl_topology_links(entities, agents, nodes, behavior_specs),
+        "links": _sdl_actor_links(entities, agents, nodes),
         "coverage": {
             "sdl_node_count": len(nodes),
+            "sdl_infrastructure_count": len(infrastructure),
+            "sdl_relationship_count": len(relationships),
             "sdl_service_count": sum(
                 len(_sequence(value, "services"))
                 for value in nodes.values()
@@ -526,7 +673,6 @@ def _sdl_topology_metadata(sdl: object, topology: object) -> dict[str, Any]:
             ),
             "sdl_agent_count": len(agents),
             "sdl_entity_count": len(entities),
-            "sdl_behavior_spec_count": len(behavior_specs),
             "contract_asset_count": len(assets),
             "contract_service_count": len(services),
             "contract_assets_missing_from_sdl": [
@@ -538,6 +684,41 @@ def _sdl_topology_metadata(sdl: object, topology: object) -> dict[str, Any]:
                 if _text(row, "id") not in _sdl_service_names(nodes)
             ],
         },
+    }
+
+
+def _sdl_infrastructure_row(
+    infrastructure_id: str,
+    row: object,
+    nodes: dict[str, Any],
+) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    node = nodes.get(infrastructure_id, {})
+    node = node if isinstance(node, dict) else {}
+    properties = _mapping(row, "properties")
+    return {
+        "id": infrastructure_id,
+        "type": _text(row, "type") or _text(node, "type"),
+        "count": _int_or_none(row.get("count")),
+        "cidr": _text(properties, "cidr"),
+        "gateway": _text(properties, "gateway"),
+        "internal": bool(properties.get("internal")),
+        "description": _text(node, "description") or _text(row, "description"),
+        "properties": _string_mapping(properties),
+    }
+
+
+def _sdl_relationship_row(relationship_id: str, row: object) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    properties = _mapping(row, "properties")
+    return {
+        "id": relationship_id,
+        "type": _text(row, "type"),
+        "source": _text(row, "source"),
+        "target": _text(row, "target"),
+        "ports": _text(properties, "ports"),
+        "category": _text(properties, "category"),
+        "properties": _string_mapping(properties),
     }
 
 
@@ -603,19 +784,6 @@ def _sdl_agent_row(agent_id: str, row: object) -> dict[str, Any]:
     }
 
 
-def _sdl_behavior_spec_row(spec_id: str, row: object) -> dict[str, Any]:
-    row = row if isinstance(row, dict) else {}
-    return {
-        "id": spec_id,
-        "semantic_version": _text_any(row, "semantic_version", "semantic-version"),
-        "lifecycle_state": _text_any(row, "lifecycle_state", "lifecycle-state"),
-        "participant_refs": _string_list(row.get("participant_refs"))
-        or _string_list(row.get("participant-refs")),
-        "ai_offensive_behavior_refs": _string_list(row.get("ai_offensive_behavior_refs"))
-        or _string_list(row.get("ai-offensive-behavior-refs")),
-    }
-
-
 def _zone_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": _text(row, "name"),
@@ -636,11 +804,10 @@ def _network_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _sdl_topology_links(
+def _sdl_actor_links(
     entities: dict[str, Any],
     agents: dict[str, Any],
     nodes: dict[str, Any],
-    behavior_specs: dict[str, Any],
 ) -> list[dict[str, str]]:
     links: list[dict[str, str]] = []
     for agent_id, agent in sorted(agents.items()):
@@ -655,16 +822,6 @@ def _sdl_topology_links(
                 links.append({"source": agent_id, "target": host, "type": "agent-node"})
         for service in _string_list(initial_knowledge.get("services")):
             links.append({"source": agent_id, "target": service, "type": "agent-service"})
-
-    for spec_id, spec in sorted(behavior_specs.items()):
-        if not isinstance(spec, dict):
-            continue
-        participants = _string_list(spec.get("participant_refs")) or _string_list(
-            spec.get("participant-refs")
-        )
-        for participant in participants:
-            if participant in agents:
-                links.append({"source": participant, "target": spec_id, "type": "agent-behavior"})
     return links
 
 
@@ -906,6 +1063,15 @@ def _load_objects(revision: Revision, data: dict[str, Any]) -> None:
 def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
     if not contracts:
         return
+    sdl = contracts.get("sdl", {})
+    behavior_specs = _mapping_any(
+        sdl if isinstance(sdl, dict) else {},
+        "behavior_specifications",
+        "behavior-specifications",
+    )
+    if _sdl_challenge_specs(behavior_specs):
+        _load_sdl_challenges(revision, behavior_specs)
+        return
 
     challenges = {
         _text(row, "flag_id"): row
@@ -1018,6 +1184,109 @@ def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
             path_step_contracts,
             telemetry,
         )
+
+
+def _load_sdl_challenges(revision: Revision, behavior_specs: dict[str, Any]) -> None:
+    module_steps = {
+        step.behavior_specification: step
+        for step in revision.steps.all()
+        if step.behavior_specification
+    }
+    steps_by_path = {step.path_step: step for step in revision.steps.all()}
+    techniques_by_step: dict[str, list[Technique]] = {}
+    for technique in revision.techniques.select_related("step").all():
+        if technique.step_id:
+            techniques_by_step.setdefault(technique.step.path_step, []).append(technique)
+
+    for index, (spec_id, spec) in enumerate(sorted(_sdl_challenge_specs(behavior_specs).items())):
+        extension = _sdl_challenge_extension(spec)
+        module_id = _text(extension, "module")
+        step = module_steps.get(module_id)
+        if step is None and module_id:
+            step = steps_by_path.get(_path_step_from_behavior_id(module_id, index + 1))
+        if step is None:
+            step = steps_by_path.get(_path_step_from_behavior_id(spec_id, index + 1))
+
+        flag_id = _text(extension, "flag_id") or _text(extension, "challenge_id") or spec_id
+        points = _int_or_none(extension.get("points"))
+        evidence_key = _text(extension, "proof_obligation") or _text(extension, "telemetry_profile")
+        implemented = _text(extension, "implementation_status") == "source-implemented"
+        challenge = Challenge.objects.create(
+            revision=revision,
+            step=step,
+            flag_id=flag_id,
+            outcome_id=_text(extension, "outcome"),
+            title=_text(extension, "title") or spec_id,
+            question=_text(extension, "proof_obligation"),
+            category=module_id,
+            difficulty=_text(extension, "difficulty"),
+            points=points,
+            hints=[],
+            implemented=implemented,
+            runtime_entrypoint="",
+            source_path=f"sdl:{spec_id}",
+            metadata={
+                "sdl_behavior_specification": spec_id,
+                "canonical_steps": [step.path_step] if step else [],
+                "delivery": {
+                    "interfaces": _string_list(extension.get("interfaces")),
+                    "live_fire": bool(extension.get("live_fire")),
+                },
+                "scoring": {
+                    "id": _text(extension, "outcome"),
+                    "points": points,
+                    "evidence": [evidence_key] if evidence_key else [],
+                    "description": _text(extension, "proof_obligation"),
+                },
+                "readiness": {
+                    "sdl_challenge": True,
+                    "module": step is not None,
+                    "scoring": points is not None,
+                    "evidence": bool(evidence_key),
+                    "runtime": implemented,
+                },
+                "sdl_challenge": {
+                    "challenge_id": _text(extension, "challenge_id") or spec_id,
+                    "disposition": _text(extension, "disposition"),
+                    "prerequisites": _string_list(extension.get("prerequisites")),
+                    "hint_costs": [
+                        value
+                        for value in _sequence(extension, "hint_costs")
+                        if isinstance(value, int)
+                    ],
+                    "target_minutes": _int_or_none(extension.get("target_minutes")),
+                    "min_minutes": _int_or_none(extension.get("min_minutes")),
+                    "max_minutes": _int_or_none(extension.get("max_minutes")),
+                    "telemetry_profile": _text(extension, "telemetry_profile"),
+                    "proof_obligation": _text(extension, "proof_obligation"),
+                    "reliability": _text(extension, "reliability"),
+                    "implementation_status": _text(extension, "implementation_status"),
+                    "issue": _int_or_none(extension.get("issue")),
+                },
+            },
+        )
+        if step and techniques_by_step.get(step.path_step):
+            challenge.techniques.set(techniques_by_step[step.path_step])
+        if evidence_key:
+            evidence, _ = Evidence.objects.get_or_create(
+                revision=revision,
+                evidence_id=evidence_key,
+                defaults={
+                    "description": f"Proof obligation: {_text(extension, 'proof_obligation')}"
+                },
+            )
+            if not evidence.description:
+                evidence.description = f"Proof obligation: {_text(extension, 'proof_obligation')}"
+                evidence.save(update_fields=["description"])
+            ChallengeEvidenceRequirement.objects.create(
+                challenge=challenge,
+                evidence=evidence,
+                evidence_key=evidence_key,
+                predicate=_text(extension, "proof_obligation"),
+                source_path=f"sdl:{spec_id}",
+                event_kind=_text(extension, "telemetry_profile"),
+                proof_fields=[],
+            )
 
 
 def _load_challenge_evidence(

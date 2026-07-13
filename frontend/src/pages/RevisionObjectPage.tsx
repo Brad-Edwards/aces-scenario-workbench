@@ -21,7 +21,6 @@ import {
 
 type ObjectKind = "challenge" | "module" | "technique" | "evidence";
 type ChallengeRow = RevisionWorkspace["challenges"][number];
-type ModuleRow = RevisionWorkspace["modules"][number];
 type TechniqueRow = RevisionWorkspace["techniques"][number];
 type EvidenceRow = RevisionWorkspace["evidence"][number];
 
@@ -64,13 +63,14 @@ function ModuleDetail({
   const evidenceIds = new Set(techniques.map((technique) => technique.evidence).filter(Boolean));
   const evidence = revision.evidence.filter((item) => evidenceIds.has(item.id));
   const challenges = revision.challenges.filter((challenge) => challenge.module === module.id);
+  const hasActivity = hasObjectActivity(revision, "step", module.id);
 
   return (
     <>
       <ObjectHeader
         revision={revision}
         title={module.name || `Module ${module.id}`}
-        description={`Module ${module.id} / ${revision.label}`}
+        description={`Module ${module.id}`}
         backTab="modules"
       />
 
@@ -83,21 +83,24 @@ function ModuleDetail({
             label="Estimated time"
             value={module.minutes == null ? "—" : `${module.minutes} minutes`}
           />
-          <DetailItem label="Behaviors" value={module.techniqueCount} />
-          <DetailItem label="Evidence" value={module.evidenceCount} />
         </DetailGrid>
         <LongText label="Objective" value={module.objective} />
         <LongText label="Expected outcome" value={module.flagOutcome} />
         <LongText label="Justification" value={module.justification} />
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+      <div className={hasActivity ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]" : ""}>
         <div className="space-y-6">
           <RelatedChallengesTable revision={revision} challenges={challenges} title="Challenges in this module" />
-          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Behaviors in this module" />
+          <RelatedTechniquesTable
+            revision={revision}
+            techniques={techniques}
+            title="Behaviors in this module"
+            showModule={false}
+          />
           <RelatedEvidenceTable revision={revision} evidence={evidence} title="Evidence referenced by this module" />
         </div>
-        <ActivityPanel revision={revision} objectType="step" objectId={module.id} />
+        {hasActivity ? <ActivityPanel revision={revision} objectType="step" objectId={module.id} /> : null}
       </div>
     </>
   );
@@ -122,7 +125,7 @@ function TechniqueDetail({
       <ObjectHeader
         revision={revision}
         title={technique.name}
-        description={`${technique.id} / ${revision.label}`}
+        description={technique.id}
         backTab="techniques"
       />
 
@@ -169,8 +172,6 @@ function TechniqueDetail({
             <LongText label="Rationale" value={technique.rationale} />
           </Card>
 
-          {module ? <ModuleSummaryCard revision={revision} module={module} /> : null}
-          {evidence ? <EvidenceSummaryCard revision={revision} evidence={evidence} /> : null}
           <RelatedChallengesTable revision={revision} challenges={challenges} title="Related challenges" />
         </div>
         <ActivityPanel
@@ -199,31 +200,30 @@ function EvidenceDetail({
   const challenges = revision.challenges.filter((challenge) =>
     challenge.evidenceRequirements.some((requirement) => requirement.evidenceId === evidence.id),
   );
+  const hasActivity = hasObjectActivity(revision, "evidence", evidence.id);
 
   return (
     <>
       <ObjectHeader
         revision={revision}
         title={evidence.id}
-        description={`Evidence / ${revision.label}`}
+        description="Evidence object"
         backTab="evidence"
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+      <div className={hasActivity ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]" : ""}>
         <div className="space-y-6">
           <Card className="p-6">
             <DetailGrid>
               <DetailItem label="Evidence ID" value={evidence.id} mono />
               <DetailItem label="Linked behaviors" value={evidence.techniqueCount} />
-              <DetailItem label="Comments" value={evidence.commentCount} />
-              <DetailItem label="Decisions" value={evidence.decisionCount} />
             </DetailGrid>
             <LongText label="Description" value={evidence.description} />
           </Card>
           <RelatedChallengesTable revision={revision} challenges={challenges} title="Challenges requiring this evidence" />
           <RelatedTechniquesTable revision={revision} techniques={techniques} title="Behaviors using this evidence" />
         </div>
-        <ActivityPanel revision={revision} objectType="evidence" objectId={evidence.id} />
+        {hasActivity ? <ActivityPanel revision={revision} objectType="evidence" objectId={evidence.id} /> : null}
       </div>
     </>
   );
@@ -241,16 +241,13 @@ function ChallengeDetail({
 
   const module = revision.modules.find((candidate) => candidate.id === challenge.module);
   const techniques = revision.techniques.filter((technique) => challenge.techniqueIds.includes(technique.id));
-  const evidence = revision.evidence.filter((item) =>
-    challenge.evidenceRequirements.some((requirement) => requirement.evidenceId === item.id),
-  );
 
   return (
     <>
       <ObjectHeader
         revision={revision}
         title={challenge.title}
-        description={`${challenge.flagId} / ${revision.label}`}
+        description={challenge.flagId}
         backTab="challenges"
       />
 
@@ -260,26 +257,6 @@ function ChallengeDetail({
             <DetailGrid>
               <DetailItem label="Flag ID" value={challenge.flagId} mono />
               <DetailItem label="Outcome" value={challenge.outcome} mono />
-              <DetailItem label="Status">
-                <Badge className={challenge.implemented ? "" : "bg-muted text-muted-foreground"}>
-                  {challenge.status}
-                </Badge>
-              </DetailItem>
-              <DetailItem label="Category" value={challenge.category || "—"} />
-              <DetailItem label="Difficulty">
-                {challenge.difficulty ? <Badge>{challenge.difficulty}</Badge> : "—"}
-              </DetailItem>
-              <DetailItem label="Points" value={challenge.points ?? "—"} />
-              <DetailItem label="Scoring points" value={challenge.scoring.points ?? "—"} />
-              <DetailItem label="Runtime">
-                {challenge.implemented ? <Badge>Implemented</Badge> : <Badge>Planned</Badge>}
-              </DetailItem>
-              <DetailItem label="Entrypoint" value={challenge.runtimeEntrypoint || "—"} mono />
-              <DetailItem
-                label="Canonical steps"
-                value={challenge.canonicalSteps.length ? challenge.canonicalSteps.join(", ") : "—"}
-                mono
-              />
               <DetailItem label="Module">
                 {module ? (
                   <Link to={modulePath(revision.id, module.id)} className="hover:underline">
@@ -289,10 +266,20 @@ function ChallengeDetail({
                   "—"
                 )}
               </DetailItem>
-              <DetailItem label="Attack path" value={challenge.sourcePath || "—"} />
+              <DetailItem label="Status">
+                <Badge className={challenge.implemented ? "" : "bg-muted text-muted-foreground"}>
+                  {challenge.status}
+                </Badge>
+              </DetailItem>
+              <DetailItem label="Difficulty">
+                {challenge.difficulty ? <Badge>{challenge.difficulty}</Badge> : "—"}
+              </DetailItem>
+              <DetailItem label="Points" value={challenge.points ?? "—"} />
+              {challenge.runtimeEntrypoint ? (
+                <DetailItem label="Entrypoint" value={challenge.runtimeEntrypoint} mono />
+              ) : null}
             </DetailGrid>
-            <LongText label="Question" value={challenge.question} />
-            <ReadinessChecklist readiness={challenge.readiness} />
+            <LongText label="Proof obligation" value={challenge.question} />
             <LongText label="Delivery" value={formatKeyValueMap(challenge.delivery)} />
             <section className="mb-5 last:mb-0">
               <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Hints</h2>
@@ -309,8 +296,12 @@ function ChallengeDetail({
           </Card>
 
           <EvidenceRequirementsTable revision={revision} challenge={challenge} />
-          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Related behaviors" />
-          <RelatedEvidenceTable revision={revision} evidence={evidence} title="Required evidence objects" />
+          <RelatedTechniquesTable
+            revision={revision}
+            techniques={techniques}
+            title="Related behaviors"
+            showModule={false}
+          />
         </div>
         <ActivityPanel
           revision={revision}
@@ -367,42 +358,6 @@ function MissingObject({
         <EmptyState title="Object not found" body="It may belong to a different revision or may have been removed." />
       </Card>
     </>
-  );
-}
-
-function ModuleSummaryCard({
-  revision,
-  module,
-}: Readonly<{
-  revision: RevisionWorkspace;
-  module: ModuleRow;
-}>) {
-  return (
-    <Card className="p-6">
-      <h2 className="mb-2 text-sm font-medium">Module</h2>
-      <Link to={modulePath(revision.id, module.id)} className="font-medium hover:underline">
-        {module.name || `Module ${module.id}`}
-      </Link>
-      <p className="mt-2 text-sm text-muted-foreground">{module.objective || "No objective captured."}</p>
-    </Card>
-  );
-}
-
-function EvidenceSummaryCard({
-  revision,
-  evidence,
-}: Readonly<{
-  revision: RevisionWorkspace;
-  evidence: EvidenceRow;
-}>) {
-  return (
-    <Card className="p-6">
-      <h2 className="mb-2 text-sm font-medium">Evidence</h2>
-      <Link to={evidencePath(revision.id, evidence.id)} className="font-mono font-medium hover:underline">
-        {evidence.id}
-      </Link>
-      <p className="mt-2 text-sm text-muted-foreground">{evidence.description || "No description captured."}</p>
-    </Card>
   );
 }
 
@@ -513,10 +468,12 @@ function RelatedTechniquesTable({
   revision,
   techniques,
   title,
+  showModule = true,
 }: Readonly<{
   revision: RevisionWorkspace;
   techniques: TechniqueRow[];
   title: string;
+  showModule?: boolean;
 }>) {
   return (
     <Card className="overflow-hidden py-0">
@@ -529,7 +486,7 @@ function RelatedTechniquesTable({
             <tr className="border-b border-border">
               <Th>ID</Th>
               <Th>Name</Th>
-              <Th>Module</Th>
+              {showModule ? <Th>Module</Th> : null}
               <Th>Evidence</Th>
             </tr>
           </thead>
@@ -542,7 +499,9 @@ function RelatedTechniquesTable({
               >
                 <Td className="font-mono font-medium">{technique.id}</Td>
                 <Td className="font-medium">{technique.name}</Td>
-                <Td className="font-mono text-muted-foreground">{technique.module || "—"}</Td>
+                {showModule ? (
+                  <Td className="font-mono text-muted-foreground">{technique.module || "—"}</Td>
+                ) : null}
                 <Td className="font-mono text-muted-foreground">{technique.evidence || "—"}</Td>
               </ClickableRow>
             ))}
@@ -572,9 +531,7 @@ function RelatedEvidenceTable({
           <thead>
             <tr className="border-b border-border">
               <Th>ID</Th>
-              <Th className="text-right">Behaviors</Th>
-              <Th className="text-right">Comments</Th>
-              <Th className="text-right">Decisions</Th>
+              <Th>Description</Th>
             </tr>
           </thead>
           <tbody>
@@ -585,9 +542,9 @@ function RelatedEvidenceTable({
                 aria-label={`Open evidence ${item.id}`}
               >
                 <Td className="font-mono font-medium">{item.id}</Td>
-                <Td className="text-right font-mono tabular-nums">{item.techniqueCount}</Td>
-                <Td className="text-right font-mono tabular-nums">{item.commentCount}</Td>
-                <Td className="text-right font-mono tabular-nums">{item.decisionCount}</Td>
+                <Td className="min-w-[320px] whitespace-normal text-muted-foreground">
+                  {item.description || "—"}
+                </Td>
               </ClickableRow>
             ))}
           </tbody>
@@ -809,35 +766,35 @@ function LongText({
   );
 }
 
-function ReadinessChecklist({ readiness }: Readonly<{ readiness: Record<string, boolean> }>) {
-  const entries = Object.entries(readiness);
-  if (entries.length === 0) return null;
-  return (
-    <section className="mb-5 last:mb-0">
-      <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Readiness</h2>
-      <div className="flex flex-wrap gap-2">
-        {entries.map(([key, ready]) => (
-          <Badge key={key} className={ready ? "" : "bg-muted text-muted-foreground"}>
-            {readinessLabel(key)}: {ready ? "yes" : "no"}
-          </Badge>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function readinessLabel(value: string) {
-  return value.replaceAll("_", " ");
-}
-
 function workspaceTabLabel(value: WorkspaceTab) {
   return value === "techniques" ? "behaviors" : value;
 }
 
-function formatKeyValueMap(value: Record<string, string>) {
+function formatKeyValueMap(value: Record<string, unknown>) {
   const entries = Object.entries(value).filter(([, entry]) => entry);
   if (entries.length === 0) return "";
-  return entries.map(([key, entry]) => `${readinessLabel(key)}: ${entry}`).join("\n");
+  return entries.map(([key, entry]) => `${humanizeKey(key)}: ${formatValue(entry)}`).join("\n");
+}
+
+function hasObjectActivity(revision: RevisionWorkspace, objectType: string, objectId: string) {
+  return (
+    revision.comments.some(
+      (comment) => comment.objectType === objectType && comment.objectId === objectId,
+    ) ||
+    revision.decisions.some(
+      (decision) => decision.objectType === objectType && decision.objectId === objectId,
+    )
+  );
+}
+
+function humanizeKey(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatValue(value: unknown) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  return String(value);
 }
 
 function decodeParam(value: string) {

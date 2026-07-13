@@ -171,10 +171,13 @@ function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
 
 function TopologyView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
   const topology = revision.topology;
+  const infrastructure = topology.infrastructure ?? [];
+  const networkSegments = infrastructure.filter((segment) => segment.cidr || segment.type === "switch");
+  const relationships = topology.relationships ?? [];
   const nodes = topology.nodes ?? [];
+  const hosts = nodes.filter((node) => node.type !== "switch");
   const entities = topology.entities ?? [];
   const agents = topology.agents ?? [];
-  const behaviorSpecs = topology.behavior_specs ?? [];
   const networks = topology.networks ?? [];
   const missingAssets = topology.coverage?.contract_assets_missing_from_sdl ?? [];
   const missingServices = topology.coverage?.contract_services_missing_from_sdl ?? [];
@@ -182,68 +185,62 @@ function TopologyView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label="SDL nodes" value={nodes.length} />
-        <SummaryCard label="SDL services" value={nodes.reduce((count, node) => count + node.services.length, 0)} />
+        <SummaryCard label="Network segments" value={networkSegments.length} />
+        <SummaryCard label="Hosts" value={hosts.length} />
+        <SummaryCard label="Services" value={nodes.reduce((count, node) => count + node.services.length, 0)} />
+        <SummaryCard label="Relationships" value={relationships.length} />
         <SummaryCard label="Agents" value={agents.length} />
-        <SummaryCard label="Entities" value={entities.length} />
-        <SummaryCard label="Behavior specs" value={behaviorSpecs.length} />
       </div>
 
       <Card className="p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-medium">SDL topology map</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              SDL is treated as the source of truth for range-visible nodes, actors, and behavior surfaces.
-            </p>
+            <h2 className="text-sm font-medium">Network topology</h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Network segments, hosts, services, and allowed relationships.</p>
           </div>
-          <Badge>{topology.source || "sdl"}</Badge>
         </div>
-        {nodes.length === 0 && agents.length === 0 && behaviorSpecs.length === 0 ? (
-          <EmptyState title="No SDL topology" body="This revision does not include SDL topology data." />
+        {networkSegments.length === 0 && nodes.length === 0 && agents.length === 0 ? (
+          <EmptyState title="No topology" body="This revision does not include topology data." />
         ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(160px,0.8fr)_minmax(180px,0.9fr)_minmax(260px,1.25fr)_minmax(280px,1.4fr)]">
-            <TopologyColumn title="Entities">
-              {entities.length ? (
-                entities.map((entity) => (
-                  <TopologyCard key={entity.id} title={entity.id} subtitle={entity.role} body={entity.description} />
+          <div className="grid gap-4 xl:grid-cols-[minmax(240px,1fr)_minmax(280px,1.15fr)_minmax(220px,0.9fr)]">
+            <TopologyColumn title="Network segments">
+              {networkSegments.length ? (
+                networkSegments.map((segment) => (
+                  <TopologySegmentCard key={segment.id} segment={segment} relationships={relationships} />
                 ))
               ) : (
-                <TopologyEmpty label="No entities" />
+                <TopologyEmpty label="No network segments" />
               )}
             </TopologyColumn>
-            <TopologyColumn title="Agents">
-              {agents.length ? (
-                agents.map((agent) => <TopologyAgentCard key={agent.id} agent={agent} />)
+            <TopologyColumn title="Hosts and services">
+              {hosts.length ? (
+                hosts.map((node) => <TopologyNodeCard key={node.id} node={node} />)
               ) : (
-                <TopologyEmpty label="No agents" />
+                <TopologyEmpty label="No hosts" />
               )}
             </TopologyColumn>
-            <TopologyColumn title="Range nodes">
-              {nodes.length ? (
-                nodes.map((node) => <TopologyNodeCard key={node.id} node={node} />)
+            <TopologyColumn title="Actors">
+              {entities.length || agents.length ? (
+                <>
+                  {entities.map((entity) => (
+                    <TopologyCard key={entity.id} title={entity.id} subtitle={entity.role} body={entity.description} />
+                  ))}
+                  {agents.map((agent) => <TopologyAgentCard key={agent.id} agent={agent} />)}
+                </>
               ) : (
-                <TopologyEmpty label="No nodes" />
-              )}
-            </TopologyColumn>
-            <TopologyColumn title="Behavior specs">
-              {behaviorSpecs.length ? (
-                behaviorSpecs.map((spec) => (
-                  <TopologyBehaviorCard key={spec.id} revision={revision} spec={spec} />
-                ))
-              ) : (
-                <TopologyEmpty label="No behavior specs" />
+                <TopologyEmpty label="No actors" />
               )}
             </TopologyColumn>
           </div>
         )}
       </Card>
 
+      <TopologyRelationshipsTable relationships={relationships} />
       <TopologyNodesTable nodes={nodes} />
-      <div className="grid gap-6 xl:grid-cols-2">
-        <TopologyNetworksTable networks={networks} />
+      {networks.length ? <TopologyNetworksTable networks={networks} /> : null}
+      {missingAssets.length || missingServices.length ? (
         <TopologyGapsTable assets={missingAssets} services={missingServices} />
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -267,6 +264,39 @@ function TopologyCard({
       <div className="font-mono text-sm font-medium">{title}</div>
       {subtitle ? <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div> : null}
       {body ? <p className="mt-2 text-sm leading-5 text-muted-foreground">{body}</p> : null}
+    </div>
+  );
+}
+
+function TopologySegmentCard({
+  segment,
+  relationships,
+}: Readonly<{
+  segment: NonNullable<RevisionWorkspace["topology"]["infrastructure"]>[number];
+  relationships: NonNullable<RevisionWorkspace["topology"]["relationships"]>;
+}>) {
+  const reference = `infrastructure.${segment.id}`;
+  const connected = relationships.filter((relationship) => relationship.source === reference || relationship.target === reference);
+  return (
+    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+      <div className="font-mono text-sm font-medium">{segment.id}</div>
+      <div className="mt-1 flex flex-wrap gap-2">
+        {segment.cidr ? <Badge>{segment.cidr}</Badge> : null}
+        {segment.gateway ? <Badge>{segment.gateway}</Badge> : null}
+        {segment.internal ? <Badge>internal</Badge> : null}
+      </div>
+      {segment.description ? <p className="mt-2 text-sm leading-5 text-muted-foreground">{segment.description}</p> : null}
+      {connected.length ? (
+        <div className="mt-3 space-y-1">
+          {connected.slice(0, 5).map((relationship) => (
+            <div key={relationship.id} className="rounded border border-border bg-background/50 px-2 py-1 text-xs text-muted-foreground">
+              <span className="font-mono text-foreground">{shortTopologyRef(relationship.target === reference ? relationship.source : relationship.target)}</span>
+              {relationship.ports ? ` / ${relationship.ports}` : ""}
+            </div>
+          ))}
+          {connected.length > 5 ? <div className="text-xs text-muted-foreground">+{connected.length - 5} more</div> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -314,31 +344,6 @@ function TopologyNodeCard({
   );
 }
 
-function TopologyBehaviorCard({
-  revision,
-  spec,
-}: Readonly<{
-  revision: RevisionWorkspace;
-  spec: NonNullable<RevisionWorkspace["topology"]["behavior_specs"]>[number];
-}>) {
-  const module = revision.modules.find((candidate) => candidate.behaviorSpecification === spec.id);
-  return (
-    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
-      <div className="font-mono text-sm font-medium">{spec.id}</div>
-      <div className="mt-1 flex flex-wrap gap-2">
-        {spec.lifecycle_state ? <Badge>{spec.lifecycle_state}</Badge> : null}
-        {module ? (
-          <Link to={modulePath(revision.id, module.id)}>
-            <Badge>Module {module.id}</Badge>
-          </Link>
-        ) : null}
-      </div>
-      <KeyValuePills label="Participants" values={spec.participant_refs} />
-      <KeyValuePills label="AI behaviors" values={spec.ai_offensive_behavior_refs} />
-    </div>
-  );
-}
-
 function TopologyEmpty({ label }: Readonly<{ label: string }>) {
   return <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">{label}</div>;
 }
@@ -357,6 +362,46 @@ function KeyValuePills({ label, values }: Readonly<{ label: string; values: stri
       </div>
     </div>
   );
+}
+
+function TopologyRelationshipsTable({
+  relationships,
+}: Readonly<{ relationships: NonNullable<RevisionWorkspace["topology"]["relationships"]> }>) {
+  return (
+    <Card className="overflow-hidden py-0">
+      <div className="border-b border-border px-3 py-3 text-sm font-medium">Network relationships</div>
+      {relationships.length === 0 ? (
+        <EmptyState title="No relationships" body="No explicit topology relationships are available." />
+      ) : (
+        <Table>
+          <thead>
+            <tr className="border-b border-border">
+              <Th>Relationship</Th>
+              <Th>Source</Th>
+              <Th>Target</Th>
+              <Th>Category</Th>
+              <Th>Ports</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {relationships.map((relationship) => (
+              <tr key={relationship.id}>
+                <Td className="font-mono font-medium">{relationship.id}</Td>
+                <Td className="font-mono text-muted-foreground">{shortTopologyRef(relationship.source)}</Td>
+                <Td className="font-mono text-muted-foreground">{shortTopologyRef(relationship.target)}</Td>
+                <Td>{relationship.category ? <Badge>{relationship.category}</Badge> : "—"}</Td>
+                <Td className="font-mono text-muted-foreground">{relationship.ports || "—"}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Card>
+  );
+}
+
+function shortTopologyRef(value: string) {
+  return value.replace(/^infrastructure\./, "");
 }
 
 function TopologyNodesTable({

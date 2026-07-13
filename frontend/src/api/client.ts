@@ -101,19 +101,21 @@ export type RevisionWorkspace = {
     name?: string;
     version?: string;
     description?: string;
+    infrastructure?: TopologyInfrastructure[];
+    relationships?: TopologyRelationship[];
     nodes?: TopologyNode[];
     entities?: TopologyEntity[];
     agents?: TopologyAgent[];
-    behavior_specs?: TopologyBehaviorSpec[];
     zones?: TopologyZone[];
     networks?: TopologyNetwork[];
     links?: Array<{ source: string; target: string; type: string }>;
     coverage?: {
       sdl_node_count: number;
+      sdl_infrastructure_count: number;
+      sdl_relationship_count: number;
       sdl_service_count: number;
       sdl_agent_count: number;
       sdl_entity_count: number;
-      sdl_behavior_spec_count: number;
       contract_asset_count: number;
       contract_service_count: number;
       contract_assets_missing_from_sdl: EnvironmentAsset[];
@@ -332,6 +334,27 @@ export type EnvironmentAffordance = {
   description: string;
 };
 
+export type TopologyInfrastructure = {
+  id: string;
+  type: string;
+  count: number | null;
+  cidr: string;
+  gateway: string;
+  internal: boolean;
+  description: string;
+  properties: Record<string, string>;
+};
+
+export type TopologyRelationship = {
+  id: string;
+  type: string;
+  source: string;
+  target: string;
+  ports: string;
+  category: string;
+  properties: Record<string, string>;
+};
+
 export type TopologyNode = {
   id: string;
   type: string;
@@ -370,14 +393,6 @@ export type TopologyAgent = {
   description: string;
   initial_hosts: string[];
   initial_services: string[];
-};
-
-export type TopologyBehaviorSpec = {
-  id: string;
-  semantic_version: string;
-  lifecycle_state: string;
-  participant_refs: string[];
-  ai_offensive_behavior_refs: string[];
 };
 
 export type TopologyZone = {

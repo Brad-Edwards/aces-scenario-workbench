@@ -136,6 +136,153 @@ def test_import_pack_uses_sdl_without_legacy_projection(scenario, tmp_path):
     assert revision.metadata["topology"]["nodes"][0]["id"] == "participant-workstation"
 
 
+def test_import_pack_expands_modular_sdl_when_parser_rejects_root(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    pack = tmp_path / "modular-sdl-pack"
+    (pack / "sdl" / "modules").mkdir(parents=True)
+    (pack / "sdl" / "scenario.sdl.yaml").write_text(
+        """
+name: modular-scenario
+version: 1.0.0
+description: Modular SDL regression fixture.
+imports:
+  - source: local:modules/environment.sdl.yaml
+    namespace: core
+    version: 1.0.0
+  - source: local:modules/module-01.sdl.yaml
+    namespace: m01
+    version: 1.0.0
+""".strip()
+    )
+    (pack / "sdl" / "modules" / "environment.sdl.yaml").write_text(
+        """
+name: environment
+version: 1.0.0
+nodes:
+  participant-entry:
+    type: switch
+    description: Participant entry network.
+  participant-workstation:
+    type: vm
+    os: linux
+    description: Participant workstation.
+    services:
+      - name: browser-terminal
+        port: 443
+infrastructure:
+  participant-entry:
+    count: 1
+    properties:
+      cidr: 10.10.10.0/24
+      gateway: 10.10.10.1
+      internal: true
+relationships:
+  participant-entry-self:
+    type: connects_to
+    source: infrastructure.participant-entry
+    target: infrastructure.participant-entry
+    properties:
+      ports: "443"
+      category: internal
+entities:
+  participant-team:
+    role: participant
+agents:
+  participant:
+    entity: participant-team
+    initial_knowledge:
+      hosts: [participant-workstation]
+      services: [browser-terminal]
+""".strip()
+    )
+    (pack / "sdl" / "modules" / "module-01.sdl.yaml").write_text(
+        """
+name: module-01
+version: 1.0.0
+behavior_specifications:
+  module-01-agent-control:
+    lifecycle_state: draft
+    participant_refs: [core.participant]
+    ai_offensive_behavior_refs: [execution, defense-evasion]
+    extensions:
+      x-keplerops:portfolio-module: module-01-agent-control
+  kep-m01-a:
+    lifecycle_state: draft
+    participant_refs: [core.participant]
+    ai_offensive_behavior_refs: [execution, defense-evasion]
+    extensions:
+      x-keplerops:challenge:
+        challenge_id: kep-m01-a
+        flag_id: flag-agent-proposal
+        module: module-01-agent-control
+        outcome: agent-control
+        title: Denied on Record
+        difficulty: accessible
+        target_minutes: 6
+        min_minutes: 3
+        max_minutes: 10
+        points: 50
+        disposition: new-design
+        prerequisites: []
+        interfaces: [browser, curl]
+        hint_costs: [0, 10]
+        proof_obligation: model-proposed-denied-tool-call
+        telemetry_profile: agent-proposal-denial
+        reliability: deterministic-10
+        issue: 406
+        implementation_status: source-implemented
+        live_fire: true
+""".strip()
+    )
+
+    def reject_root(*args, **kwargs):
+        raise ValueError("duplicate explicitness model paths")
+
+    monkeypatch.setattr("aces_scenario_workbench.workbench.ingest.parse_sdl_file", reject_root)
+
+    revision, created = import_pack(scenario, pack)
+
+    assert created is True
+    assert revision.metadata["semantic_binding"] == {
+        "source": "aces-sdl",
+        "parser": "raw-sdl-fallback",
+    }
+    assert revision.metadata["topology"]["parser_error"] == "duplicate explicitness model paths"
+    assert revision.steps.count() == 1
+    assert revision.techniques.count() == 2
+    assert revision.challenges.count() == 1
+    assert list(revision.techniques.values_list("technique_id", flat=True)) == [
+        "SDL.1.defense-evasion",
+        "SDL.1.execution",
+    ]
+    challenge = revision.challenges.get(flag_id="flag-agent-proposal")
+    assert challenge.step.path_step == "1"
+    assert challenge.implemented is True
+    assert challenge.points == 50
+    assert challenge.metadata["readiness"] == {
+        "sdl_challenge": True,
+        "module": True,
+        "scoring": True,
+        "evidence": True,
+        "runtime": True,
+    }
+    assert challenge.metadata["sdl_challenge"]["target_minutes"] == 6
+    assert challenge.techniques.count() == 2
+    requirement = challenge.evidence_requirements.get(
+        evidence_key="model-proposed-denied-tool-call"
+    )
+    assert requirement.event_kind == "agent-proposal-denial"
+    assert requirement.source_path == "sdl:kep-m01-a"
+    assert revision.metadata["topology"]["infrastructure"][0]["cidr"] == "10.10.10.0/24"
+    assert revision.metadata["topology"]["relationships"][0]["ports"] == "443"
+    assert revision.metadata["topology"]["coverage"]["sdl_infrastructure_count"] == 1
+    assert revision.metadata["topology"]["coverage"]["sdl_relationship_count"] == 1
+    assert "behavior_specs" not in revision.metadata["topology"]
+
+
 def test_changed_challenge_contract_creates_new_revision(scenario, tmp_path):
     pack = tmp_path / "sample-scenario"
     shutil.copytree(SAMPLE.parent, pack)
