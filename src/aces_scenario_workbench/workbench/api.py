@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
@@ -72,6 +73,31 @@ def _object_exists(revision: Revision, object_type: str, object_stable_id: str) 
         return False
     model, field = lookup
     return model.objects.filter(revision=revision, **{field: object_stable_id}).exists()
+
+
+def _validate_object_mutation(
+    user: object,
+    revision: Revision,
+    object_type: str,
+    object_stable_id: str,
+    *,
+    allowed_types: set[str],
+    permission_message: str,
+    type_message: str,
+) -> None:
+    if not authz.can_contribute(user, revision.scenario):
+        raise UploadError(permission_message, 403)
+    if object_type not in allowed_types:
+        raise UploadError(type_message, 400)
+    if not _object_exists(revision, object_type, object_stable_id):
+        raise UploadError("Object not found.", 404)
+
+
+def _required_text(payload: dict[str, Any], key: str, message: str) -> str:
+    value = str(payload.get(key, "")).strip()
+    if not value:
+        raise UploadError(message, 400)
+    return value
 
 
 def _record_activity(
@@ -260,21 +286,20 @@ def post_object_comment(
         pk=revision_pk,
         scenario__memberships__user=request.user,
     )
-    if not authz.can_contribute(request.user, revision.scenario):
-        return JsonResponse({"detail": "You do not have permission to comment."}, status=403)
-    if object_type not in _COMMENTABLE_OBJECT_TYPES:
-        return JsonResponse(
-            {"detail": "Comments are not supported for this object type."}, status=400
-        )
-    if not _object_exists(revision, object_type, object_stable_id):
-        return JsonResponse({"detail": "Object not found."}, status=404)
     try:
+        _validate_object_mutation(
+            request.user,
+            revision,
+            object_type,
+            object_stable_id,
+            allowed_types=_COMMENTABLE_OBJECT_TYPES,
+            permission_message="You do not have permission to comment.",
+            type_message="Comments are not supported for this object type.",
+        )
         payload = _read_json_object(request)
+        body = _required_text(payload, "body", "Comment body is required.")
     except UploadError as exc:
         return JsonResponse({"detail": exc.detail}, status=exc.status)
-    body = str(payload.get("body", "")).strip()
-    if not body:
-        return JsonResponse({"detail": "Comment body is required."}, status=400)
     comment = Comment.objects.create(
         revision=revision,
         object_type=object_type,
@@ -297,19 +322,20 @@ def post_object_decision(
         pk=revision_pk,
         scenario__memberships__user=request.user,
     )
-    if not authz.can_contribute(request.user, revision.scenario):
-        return JsonResponse(
-            {"detail": "You do not have permission to record decisions."}, status=403
-        )
-    if object_type not in _DECISION_OBJECT_TYPES:
-        return JsonResponse({"detail": "Decisions are only supported for challenges."}, status=400)
-    if not _object_exists(revision, object_type, object_stable_id):
-        return JsonResponse({"detail": "Object not found."}, status=404)
     try:
+        _validate_object_mutation(
+            request.user,
+            revision,
+            object_type,
+            object_stable_id,
+            allowed_types=_DECISION_OBJECT_TYPES,
+            permission_message="You do not have permission to record decisions.",
+            type_message="Decisions are only supported for challenges.",
+        )
         payload = _read_json_object(request)
+        decision_value = _required_text(payload, "decision", "Decision is not valid.")
     except UploadError as exc:
         return JsonResponse({"detail": exc.detail}, status=exc.status)
-    decision_value = str(payload.get("decision", "")).strip()
     if decision_value not in DecisionType.values:
         return JsonResponse({"detail": "Decision is not valid."}, status=400)
     decision = Decision.objects.create(
@@ -366,7 +392,7 @@ def _framework_label(revision: Revision) -> str:
     return " ".join(part for part in (revision.framework_name, revision.framework_release) if part)
 
 
-def _anchor_counts(items: object) -> dict[tuple[str, str], int]:
+def _anchor_counts(items: Iterable[Any]) -> dict[tuple[str, str], int]:
     counts: dict[tuple[str, str], int] = {}
     for item in items:
         key = (item.object_type, item.object_stable_id)

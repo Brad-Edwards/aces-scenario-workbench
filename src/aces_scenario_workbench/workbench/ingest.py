@@ -15,6 +15,7 @@ import ast
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +67,42 @@ SDL_MAPPING_SECTIONS = (
 
 class ProjectionError(ValueError):
     """Raised when a projection file cannot be read or parsed."""
+
+
+@dataclass
+class LegacyChallengeContext:
+    challenges: dict[str, dict[str, Any]]
+    placements: list[dict[str, Any]]
+    outcomes: dict[str, dict[str, Any]]
+    path_steps: dict[str, dict[str, Any]]
+    telemetry: dict[str, dict[str, Any]]
+    awards: dict[str, dict[str, Any]]
+    alternate_awards: list[dict[str, Any]]
+    bundles: list[dict[str, Any]]
+    runtime: dict[str, dict[str, Any]]
+    steps: dict[str, Step]
+    techniques_by_step: dict[str, list[Technique]]
+
+
+@dataclass
+class LegacyChallengeRow:
+    placement: dict[str, Any]
+    runtime_row: dict[str, Any]
+    challenge_row: dict[str, Any]
+    outcome: dict[str, Any]
+    outcome_id: str
+    canonical_steps: list[str]
+    path_step_contracts: list[dict[str, Any]]
+    award: dict[str, Any]
+    evidence_ids: list[str]
+    implemented: bool
+
+
+@dataclass
+class SdlChallengeContext:
+    module_steps: dict[str, Step]
+    steps_by_path: dict[str, Step]
+    techniques_by_step: dict[str, list[Technique]]
 
 
 def _text(entry: dict[str, Any], key: str, default: str = "") -> str:
@@ -293,56 +330,9 @@ def _sdl_defines_modules(sdl: object) -> bool:
 def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dict[str, Any]:
     """Adapt SDL behavior specifications into the workbench's revision graph shape."""
     behavior_specs = _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
-    module_specs = _sdl_module_specs(behavior_specs)
+    projection_rows = _sdl_projection_rows(_sdl_module_specs(behavior_specs), projection)
+    techniques = [technique for row in projection_rows for technique in row["techniques"]]
     framework = _mapping(projection, "framework")
-    steps_by_behavior = {
-        _text(row, "aces_behavior_specification"): row
-        for row in _entries(projection, "steps")
-        if _text(row, "aces_behavior_specification")
-    }
-    steps_by_id = {_text(row, "path_step"): row for row in _entries(projection, "steps")}
-    steps = []
-    tactic_ids: set[str] = set()
-    techniques = []
-
-    for index, (behavior_id, spec) in enumerate(sorted(module_specs.items()), start=1):
-        spec = spec if isinstance(spec, dict) else {}
-        path_step = _path_step_from_behavior_id(behavior_id, index)
-        enrichment = steps_by_behavior.get(behavior_id) or steps_by_id.get(path_step, {})
-        refs = _sdl_behavior_refs(spec)
-        tactic_ids.update(refs)
-        evidence = _string_list(enrichment.get("evidence"))
-        steps.append(
-            {
-                "path_step": path_step,
-                "aces_behavior_specification": behavior_id,
-                "tier": _text(enrichment, "tier")
-                or _text_any(spec, "lifecycle_state", "lifecycle-state"),
-                "surface": _text(enrichment, "surface") or _surface_from_behavior_id(behavior_id),
-                "estimated_minutes": enrichment.get("estimated_minutes"),
-                "objective": _text(enrichment, "objective")
-                or f"Exercise SDL behavior specification {behavior_id}.",
-                "evidence": evidence,
-                "flag_outcome": _text(enrichment, "flag_outcome"),
-                "justification": _text(enrichment, "justification")
-                or "Defined by the ACES SDL behavior specification.",
-            }
-        )
-        for ref in refs:
-            techniques.append(
-                {
-                    "id": _sdl_technique_id(path_step, ref, behavior_id),
-                    "name": _behavior_ref_name(ref),
-                    "tactics": [ref],
-                    "challenge_step": path_step,
-                    "surface": behavior_id,
-                    "evidence": evidence[0] if evidence else "",
-                    "relationship": "sdl_behavior_ref",
-                    "coverage_status": _text_any(spec, "lifecycle_state", "lifecycle-state"),
-                    "planned_action": f"Exercise {ref} through {behavior_id}.",
-                    "rationale": "Derived from ACES SDL ai_offensive_behavior_refs.",
-                }
-            )
 
     return {
         "schema_version": 1,
@@ -356,23 +346,120 @@ def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dic
             "release": _text(sdl, "version"),
         },
         "experience_contract": _mapping(projection, "experience_contract"),
-        "steps": steps,
-        "tactic_modules": [
-            {
-                "tactic_id": tactic_id,
-                "name": _behavior_ref_name(tactic_id),
-                "challenge_steps": sorted(
-                    {
-                        row["challenge_step"]
-                        for row in techniques
-                        if tactic_id in _string_list(row.get("tactics"))
-                    }
-                ),
-            }
-            for tactic_id in sorted(tactic_ids)
-        ],
+        "steps": [row["step"] for row in projection_rows],
+        "tactic_modules": _sdl_tactic_modules(techniques),
         "technique_catalog": techniques,
     }
+
+
+def _sdl_projection_rows(
+    module_specs: dict[str, Any], projection: dict[str, Any]
+) -> list[dict[str, Any]]:
+    enrichment = _sdl_projection_enrichment(projection)
+    return [
+        _sdl_projection_row(index, behavior_id, spec, enrichment)
+        for index, (behavior_id, spec) in enumerate(sorted(module_specs.items()), start=1)
+    ]
+
+
+def _sdl_projection_enrichment(
+    projection: dict[str, Any],
+) -> dict[str, dict[str, dict[str, Any]]]:
+    step_rows = _entries(projection, "steps")
+    return {
+        "by_behavior": {
+            _text(row, "aces_behavior_specification"): row
+            for row in step_rows
+            if _text(row, "aces_behavior_specification")
+        },
+        "by_id": {_text(row, "path_step"): row for row in step_rows},
+    }
+
+
+def _sdl_projection_row(
+    index: int,
+    behavior_id: str,
+    spec: object,
+    enrichment: dict[str, dict[str, dict[str, Any]]],
+) -> dict[str, Any]:
+    spec_row = spec if isinstance(spec, dict) else {}
+    path_step = _path_step_from_behavior_id(behavior_id, index)
+    step_enrichment = enrichment["by_behavior"].get(behavior_id) or enrichment["by_id"].get(
+        path_step, {}
+    )
+    evidence = _string_list(step_enrichment.get("evidence"))
+    return {
+        "step": _sdl_step_row(behavior_id, path_step, spec_row, step_enrichment, evidence),
+        "techniques": _sdl_technique_rows(behavior_id, path_step, spec_row, evidence),
+    }
+
+
+def _sdl_step_row(
+    behavior_id: str,
+    path_step: str,
+    spec: dict[str, Any],
+    enrichment: dict[str, Any],
+    evidence: list[str],
+) -> dict[str, Any]:
+    return {
+        "path_step": path_step,
+        "aces_behavior_specification": behavior_id,
+        "tier": _text(enrichment, "tier") or _text_any(spec, "lifecycle_state", "lifecycle-state"),
+        "surface": _text(enrichment, "surface") or _surface_from_behavior_id(behavior_id),
+        "estimated_minutes": enrichment.get("estimated_minutes"),
+        "objective": _text(enrichment, "objective")
+        or f"Exercise SDL behavior specification {behavior_id}.",
+        "evidence": evidence,
+        "flag_outcome": _text(enrichment, "flag_outcome"),
+        "justification": _text(enrichment, "justification")
+        or "Defined by the ACES SDL behavior specification.",
+    }
+
+
+def _sdl_technique_rows(
+    behavior_id: str,
+    path_step: str,
+    spec: dict[str, Any],
+    evidence: list[str],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": _sdl_technique_id(path_step, ref, behavior_id),
+            "name": _behavior_ref_name(ref),
+            "tactics": [ref],
+            "challenge_step": path_step,
+            "surface": behavior_id,
+            "evidence": evidence[0] if evidence else "",
+            "relationship": "sdl_behavior_ref",
+            "coverage_status": _text_any(spec, "lifecycle_state", "lifecycle-state"),
+            "planned_action": f"Exercise {ref} through {behavior_id}.",
+            "rationale": "Derived from ACES SDL ai_offensive_behavior_refs.",
+        }
+        for ref in _sdl_behavior_refs(spec)
+    ]
+
+
+def _sdl_tactic_modules(techniques: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    steps_by_tactic = _sdl_steps_by_tactic(techniques)
+    return [
+        {
+            "tactic_id": tactic_id,
+            "name": _behavior_ref_name(tactic_id),
+            "challenge_steps": sorted(challenge_steps),
+        }
+        for tactic_id, challenge_steps in sorted(steps_by_tactic.items())
+    ]
+
+
+def _sdl_steps_by_tactic(techniques: list[dict[str, Any]]) -> dict[str, set[str]]:
+    steps_by_tactic: dict[str, set[str]] = {}
+    for row in techniques:
+        challenge_step = row.get("challenge_step")
+        if not isinstance(challenge_step, str):
+            continue
+        for tactic_id in _string_list(row.get("tactics")):
+            steps_by_tactic.setdefault(tactic_id, set()).add(challenge_step)
+    return steps_by_tactic
 
 
 def _sdl_module_specs(behavior_specs: dict[str, Any]) -> dict[str, Any]:
@@ -1063,230 +1150,378 @@ def _load_objects(revision: Revision, data: dict[str, Any]) -> None:
 def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
     if not contracts:
         return
+    behavior_specs = _contract_behavior_specs(contracts)
+    if _sdl_challenge_specs(behavior_specs):
+        _load_sdl_challenges(revision, behavior_specs)
+    else:
+        _load_legacy_challenges(revision, _legacy_challenge_context(revision, contracts))
+
+
+def _contract_behavior_specs(contracts: dict[str, Any]) -> dict[str, Any]:
     sdl = contracts.get("sdl", {})
-    behavior_specs = _mapping_any(
+    return _mapping_any(
         sdl if isinstance(sdl, dict) else {},
         "behavior_specifications",
         "behavior-specifications",
     )
-    if _sdl_challenge_specs(behavior_specs):
-        _load_sdl_challenges(revision, behavior_specs)
-        return
 
-    challenges = {
-        _text(row, "flag_id"): row
-        for row in _entries(contracts.get("challenges", {}), "challenges")
-    }
-    placements = _entries(contracts.get("placement", {}), "flags")
-    outcomes = {
-        _text(row, "id"): row for row in _entries(contracts.get("objectives", {}), "outcomes")
-    }
-    path_steps = {
-        _text(row, "id"): row for row in _entries(contracts.get("objectives", {}), "path_steps")
-    }
-    telemetry = {
-        _text(row, "evidence"): row for row in _entries(contracts.get("telemetry", {}), "events")
-    }
+
+def _legacy_challenge_context(
+    revision: Revision, contracts: dict[str, Any]
+) -> LegacyChallengeContext:
     scoring = contracts.get("scoring", {})
-    awards = {
-        _award_id(row): row
-        for row in _entries(scoring if isinstance(scoring, dict) else {}, "awards")
-        if _award_id(row)
-    }
-    alternate_awards = _entries(scoring if isinstance(scoring, dict) else {}, "alternate_awards")
-    bundles = _entries(scoring if isinstance(scoring, dict) else {}, "bundles")
+    scoring = scoring if isinstance(scoring, dict) else {}
     runtime = contracts.get("runtime_challenges", {})
-    runtime = runtime if isinstance(runtime, dict) else {}
-
-    steps = {step.path_step: step for step in revision.steps.all()}
-    techniques_by_step: dict[str, list[Technique]] = {}
-    for technique in revision.techniques.select_related("step").all():
-        if technique.step_id:
-            techniques_by_step.setdefault(technique.step.path_step, []).append(technique)
-
-    for placement in placements:
-        outcome_id = _text(placement, "outcome")
-        runtime_row = runtime.get(outcome_id)
-        challenge_row = challenges.get(_text(placement, "flag_id"))
-        outcome = outcomes.get(outcome_id)
-        if not isinstance(runtime_row, dict) or not challenge_row or not outcome:
-            if not challenge_row or not outcome:
-                continue
-            runtime_row = {}
-
-        if not isinstance(runtime_row, dict):
-            continue
-
-        canonical_steps = _string_list(outcome.get("canonical_steps"))
-        step = steps.get(canonical_steps[0]) if canonical_steps else None
-        path_step_contracts = [
-            path_steps.get(path_step_id, {})
-            for path_step_id in canonical_steps
-            if isinstance(path_steps.get(path_step_id, {}), dict)
-        ]
-        source_path = _first_evidence_source(path_step_contracts)
-        award = awards.get(outcome_id, {})
-        evidence_ids = _challenge_evidence_ids(outcome, placement)
-        implemented = bool(runtime_row)
-        challenge = Challenge.objects.create(
-            revision=revision,
-            step=step,
-            flag_id=_text(placement, "flag_id"),
-            outcome_id=outcome_id,
-            title=_text(challenge_row, "title"),
-            question=_text(challenge_row, "question"),
-            category=_text(challenge_row, "category"),
-            difficulty=_text(challenge_row, "difficulty"),
-            points=_int_or_none(challenge_row.get("points"))
-            or _int_or_none(award.get("points") if isinstance(award, dict) else None),
-            hints=_string_list(challenge_row.get("hints")),
-            implemented=implemented,
-            runtime_entrypoint=_text(runtime_row, "entrypoint"),
-            source_path=source_path,
-            metadata={
-                "delivery": _mapping(placement, "delivery"),
-                "profiles": _string_list(placement.get("profiles")),
-                "canonical_steps": canonical_steps,
-                "objective": {
-                    "title": _text(outcome, "title"),
-                    "success_state": _text(outcome, "success_state"),
-                },
-                "scoring": _award_row(award) if isinstance(award, dict) else {},
-                "alternate_awards": [
-                    _award_row(row) for row in alternate_awards if _award_id(row) == outcome_id
-                ],
-                "bundles": [
-                    _bundle_row(row) for row in bundles if outcome_id in _bundle_outcomes(row)
-                ],
-                "readiness": {
-                    "challenge_contract": True,
-                    "placement": True,
-                    "objective": True,
-                    "scoring": isinstance(award, dict) and bool(award),
-                    "runtime": implemented,
-                    "telemetry": all(evidence_id in telemetry for evidence_id in evidence_ids),
-                    "evidence_contract": _all_evidence_has_contract(
-                        evidence_ids, path_step_contracts
-                    ),
-                },
-            },
-        )
-        linked_techniques = []
-        for path_step_id in canonical_steps:
-            linked_techniques.extend(techniques_by_step.get(path_step_id, []))
-        if linked_techniques:
-            challenge.techniques.set(linked_techniques)
-        _load_challenge_evidence(
-            challenge,
-            revision,
-            outcome,
-            placement,
-            path_step_contracts,
-            telemetry,
-        )
+    return LegacyChallengeContext(
+        challenges=_rows_by_key(contracts.get("challenges", {}), "challenges", "flag_id"),
+        placements=_entries(contracts.get("placement", {}), "flags"),
+        outcomes=_rows_by_key(contracts.get("objectives", {}), "outcomes", "id"),
+        path_steps=_rows_by_key(contracts.get("objectives", {}), "path_steps", "id"),
+        telemetry=_rows_by_key(contracts.get("telemetry", {}), "events", "evidence"),
+        awards=_award_rows(scoring),
+        alternate_awards=_entries(scoring, "alternate_awards"),
+        bundles=_entries(scoring, "bundles"),
+        runtime=runtime if isinstance(runtime, dict) else {},
+        steps=_revision_steps_by_path(revision),
+        techniques_by_step=_techniques_by_step(revision),
+    )
 
 
-def _load_sdl_challenges(revision: Revision, behavior_specs: dict[str, Any]) -> None:
-    module_steps = {
+def _rows_by_key(source: object, section: str, key: str) -> dict[str, dict[str, Any]]:
+    return {_text(row, key): row for row in _entries(source, section)}
+
+
+def _award_rows(scoring: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {_award_id(row): row for row in _entries(scoring, "awards") if _award_id(row)}
+
+
+def _revision_steps_by_path(revision: Revision) -> dict[str, Step]:
+    return {step.path_step: step for step in revision.steps.all()}
+
+
+def _revision_module_steps(revision: Revision) -> dict[str, Step]:
+    return {
         step.behavior_specification: step
         for step in revision.steps.all()
         if step.behavior_specification
     }
-    steps_by_path = {step.path_step: step for step in revision.steps.all()}
+
+
+def _techniques_by_step(revision: Revision) -> dict[str, list[Technique]]:
     techniques_by_step: dict[str, list[Technique]] = {}
     for technique in revision.techniques.select_related("step").all():
         if technique.step_id:
             techniques_by_step.setdefault(technique.step.path_step, []).append(technique)
+    return techniques_by_step
 
-    for index, (spec_id, spec) in enumerate(sorted(_sdl_challenge_specs(behavior_specs).items())):
-        extension = _sdl_challenge_extension(spec)
-        module_id = _text(extension, "module")
-        step = module_steps.get(module_id)
-        if step is None and module_id:
-            step = steps_by_path.get(_path_step_from_behavior_id(module_id, index + 1))
-        if step is None:
-            step = steps_by_path.get(_path_step_from_behavior_id(spec_id, index + 1))
 
-        flag_id = _text(extension, "flag_id") or _text(extension, "challenge_id") or spec_id
-        points = _int_or_none(extension.get("points"))
-        evidence_key = _text(extension, "proof_obligation") or _text(extension, "telemetry_profile")
-        implemented = _text(extension, "implementation_status") == "source-implemented"
-        challenge = Challenge.objects.create(
-            revision=revision,
-            step=step,
-            flag_id=flag_id,
-            outcome_id=_text(extension, "outcome"),
-            title=_text(extension, "title") or spec_id,
-            question=_text(extension, "proof_obligation"),
-            category=module_id,
-            difficulty=_text(extension, "difficulty"),
-            points=points,
-            hints=[],
-            implemented=implemented,
-            runtime_entrypoint="",
-            source_path=f"sdl:{spec_id}",
-            metadata={
-                "sdl_behavior_specification": spec_id,
-                "canonical_steps": [step.path_step] if step else [],
-                "delivery": {
-                    "interfaces": _string_list(extension.get("interfaces")),
-                    "live_fire": bool(extension.get("live_fire")),
-                },
-                "scoring": {
-                    "id": _text(extension, "outcome"),
-                    "points": points,
-                    "evidence": [evidence_key] if evidence_key else [],
-                    "description": _text(extension, "proof_obligation"),
-                },
-                "readiness": {
-                    "sdl_challenge": True,
-                    "module": step is not None,
-                    "scoring": points is not None,
-                    "evidence": bool(evidence_key),
-                    "runtime": implemented,
-                },
-                "sdl_challenge": {
-                    "challenge_id": _text(extension, "challenge_id") or spec_id,
-                    "disposition": _text(extension, "disposition"),
-                    "prerequisites": _string_list(extension.get("prerequisites")),
-                    "hint_costs": [
-                        value
-                        for value in _sequence(extension, "hint_costs")
-                        if isinstance(value, int)
-                    ],
-                    "target_minutes": _int_or_none(extension.get("target_minutes")),
-                    "min_minutes": _int_or_none(extension.get("min_minutes")),
-                    "max_minutes": _int_or_none(extension.get("max_minutes")),
-                    "telemetry_profile": _text(extension, "telemetry_profile"),
-                    "proof_obligation": _text(extension, "proof_obligation"),
-                    "reliability": _text(extension, "reliability"),
-                    "implementation_status": _text(extension, "implementation_status"),
-                    "issue": _int_or_none(extension.get("issue")),
-                },
-            },
+def _load_legacy_challenges(revision: Revision, context: LegacyChallengeContext) -> None:
+    for placement in context.placements:
+        challenge_row = _legacy_challenge_row(placement, context)
+        if challenge_row is None:
+            continue
+        challenge = _create_legacy_challenge(revision, challenge_row, context)
+        _link_challenge_to_steps(challenge, challenge_row.canonical_steps, context)
+        _load_challenge_evidence(
+            challenge,
+            revision,
+            challenge_row.outcome,
+            challenge_row.placement,
+            challenge_row.path_step_contracts,
+            context.telemetry,
         )
-        if step and techniques_by_step.get(step.path_step):
-            challenge.techniques.set(techniques_by_step[step.path_step])
-        if evidence_key:
-            evidence, _ = Evidence.objects.get_or_create(
-                revision=revision,
-                evidence_id=evidence_key,
-                defaults={
-                    "description": f"Proof obligation: {_text(extension, 'proof_obligation')}"
-                },
-            )
-            if not evidence.description:
-                evidence.description = f"Proof obligation: {_text(extension, 'proof_obligation')}"
-                evidence.save(update_fields=["description"])
-            ChallengeEvidenceRequirement.objects.create(
-                challenge=challenge,
-                evidence=evidence,
-                evidence_key=evidence_key,
-                predicate=_text(extension, "proof_obligation"),
-                source_path=f"sdl:{spec_id}",
-                event_kind=_text(extension, "telemetry_profile"),
-                proof_fields=[],
-            )
+
+
+def _legacy_challenge_row(
+    placement: dict[str, Any], context: LegacyChallengeContext
+) -> LegacyChallengeRow | None:
+    outcome_id = _text(placement, "outcome")
+    challenge_row = context.challenges.get(_text(placement, "flag_id"))
+    outcome = context.outcomes.get(outcome_id)
+    if not challenge_row or not outcome:
+        return None
+
+    canonical_steps = _string_list(outcome.get("canonical_steps"))
+    path_step_contracts = _path_step_contracts(canonical_steps, context)
+    runtime_row = context.runtime.get(outcome_id)
+    return LegacyChallengeRow(
+        placement=placement,
+        runtime_row=runtime_row if isinstance(runtime_row, dict) else {},
+        challenge_row=challenge_row,
+        outcome=outcome,
+        outcome_id=outcome_id,
+        canonical_steps=canonical_steps,
+        path_step_contracts=path_step_contracts,
+        award=context.awards.get(outcome_id, {}),
+        evidence_ids=_challenge_evidence_ids(outcome, placement),
+        implemented=isinstance(runtime_row, dict) and bool(runtime_row),
+    )
+
+
+def _path_step_contracts(
+    canonical_steps: list[str], context: LegacyChallengeContext
+) -> list[dict[str, Any]]:
+    return [
+        path_step
+        for path_step_id in canonical_steps
+        if isinstance((path_step := context.path_steps.get(path_step_id, {})), dict)
+    ]
+
+
+def _create_legacy_challenge(
+    revision: Revision,
+    row: LegacyChallengeRow,
+    context: LegacyChallengeContext,
+) -> Challenge:
+    return Challenge.objects.create(
+        revision=revision,
+        step=context.steps.get(row.canonical_steps[0]) if row.canonical_steps else None,
+        flag_id=_text(row.placement, "flag_id"),
+        outcome_id=row.outcome_id,
+        title=_text(row.challenge_row, "title"),
+        question=_text(row.challenge_row, "question"),
+        category=_text(row.challenge_row, "category"),
+        difficulty=_text(row.challenge_row, "difficulty"),
+        points=_int_or_none(row.challenge_row.get("points"))
+        or _int_or_none(row.award.get("points")),
+        hints=_string_list(row.challenge_row.get("hints")),
+        implemented=row.implemented,
+        runtime_entrypoint=_text(row.runtime_row, "entrypoint"),
+        source_path=_first_evidence_source(row.path_step_contracts),
+        metadata=_legacy_challenge_metadata(row, context),
+    )
+
+
+def _legacy_challenge_metadata(
+    row: LegacyChallengeRow,
+    context: LegacyChallengeContext,
+) -> dict[str, Any]:
+    return {
+        "delivery": _mapping(row.placement, "delivery"),
+        "profiles": _string_list(row.placement.get("profiles")),
+        "canonical_steps": row.canonical_steps,
+        "objective": {
+            "title": _text(row.outcome, "title"),
+            "success_state": _text(row.outcome, "success_state"),
+        },
+        "scoring": _award_row(row.award),
+        "alternate_awards": [
+            _award_row(award)
+            for award in context.alternate_awards
+            if _award_id(award) == row.outcome_id
+        ],
+        "bundles": [
+            _bundle_row(bundle)
+            for bundle in context.bundles
+            if row.outcome_id in _bundle_outcomes(bundle)
+        ],
+        "readiness": _legacy_challenge_readiness(row, context),
+    }
+
+
+def _legacy_challenge_readiness(
+    row: LegacyChallengeRow,
+    context: LegacyChallengeContext,
+) -> dict[str, bool]:
+    return {
+        "challenge_contract": True,
+        "placement": True,
+        "objective": True,
+        "scoring": bool(row.award),
+        "runtime": row.implemented,
+        "telemetry": all(evidence_id in context.telemetry for evidence_id in row.evidence_ids),
+        "evidence_contract": _all_evidence_has_contract(row.evidence_ids, row.path_step_contracts),
+    }
+
+
+def _link_challenge_to_steps(
+    challenge: Challenge,
+    canonical_steps: list[str],
+    context: LegacyChallengeContext,
+) -> None:
+    linked_techniques = _techniques_for_steps(context.techniques_by_step, canonical_steps)
+    if linked_techniques:
+        challenge.techniques.set(linked_techniques)
+
+
+def _techniques_for_steps(
+    techniques_by_step: dict[str, list[Technique]], path_step_ids: list[str]
+) -> list[Technique]:
+    techniques = []
+    for path_step_id in path_step_ids:
+        techniques.extend(techniques_by_step.get(path_step_id, []))
+    return techniques
+
+
+def _load_sdl_challenges(revision: Revision, behavior_specs: dict[str, Any]) -> None:
+    context = _sdl_challenge_context(revision)
+    challenge_specs = _sdl_challenge_specs(behavior_specs)
+    for index, (spec_id, spec) in enumerate(sorted(challenge_specs.items())):
+        _load_sdl_challenge(revision, context, index, spec_id, spec)
+
+
+def _sdl_challenge_context(revision: Revision) -> SdlChallengeContext:
+    return SdlChallengeContext(
+        module_steps=_revision_module_steps(revision),
+        steps_by_path=_revision_steps_by_path(revision),
+        techniques_by_step=_techniques_by_step(revision),
+    )
+
+
+def _load_sdl_challenge(
+    revision: Revision,
+    context: SdlChallengeContext,
+    index: int,
+    spec_id: str,
+    spec: dict[str, Any],
+) -> None:
+    extension = _sdl_challenge_extension(spec)
+    step = _sdl_challenge_step(context, spec_id, extension, index)
+    evidence_key = _sdl_challenge_evidence_key(extension)
+    challenge = _create_sdl_challenge(revision, spec_id, extension, step, evidence_key)
+    _link_sdl_challenge_techniques(challenge, step, context)
+    _load_sdl_challenge_evidence(challenge, revision, spec_id, extension, evidence_key)
+
+
+def _sdl_challenge_step(
+    context: SdlChallengeContext,
+    spec_id: str,
+    extension: dict[str, Any],
+    index: int,
+) -> Step | None:
+    module_id = _text(extension, "module")
+    step = context.module_steps.get(module_id)
+    if step is None and module_id:
+        step = context.steps_by_path.get(_path_step_from_behavior_id(module_id, index + 1))
+    if step is None:
+        step = context.steps_by_path.get(_path_step_from_behavior_id(spec_id, index + 1))
+    return step
+
+
+def _sdl_challenge_evidence_key(extension: dict[str, Any]) -> str:
+    return _text(extension, "proof_obligation") or _text(extension, "telemetry_profile")
+
+
+def _create_sdl_challenge(
+    revision: Revision,
+    spec_id: str,
+    extension: dict[str, Any],
+    step: Step | None,
+    evidence_key: str,
+) -> Challenge:
+    module_id = _text(extension, "module")
+    points = _int_or_none(extension.get("points"))
+    return Challenge.objects.create(
+        revision=revision,
+        step=step,
+        flag_id=_sdl_challenge_flag_id(spec_id, extension),
+        outcome_id=_text(extension, "outcome"),
+        title=_text(extension, "title") or spec_id,
+        question=_text(extension, "proof_obligation"),
+        category=module_id,
+        difficulty=_text(extension, "difficulty"),
+        points=points,
+        hints=[],
+        implemented=_sdl_challenge_implemented(extension),
+        runtime_entrypoint="",
+        source_path=f"sdl:{spec_id}",
+        metadata=_sdl_challenge_metadata(spec_id, extension, step, points, evidence_key),
+    )
+
+
+def _sdl_challenge_flag_id(spec_id: str, extension: dict[str, Any]) -> str:
+    return _text(extension, "flag_id") or _text(extension, "challenge_id") or spec_id
+
+
+def _sdl_challenge_implemented(extension: dict[str, Any]) -> bool:
+    return _text(extension, "implementation_status") == "source-implemented"
+
+
+def _sdl_challenge_metadata(
+    spec_id: str,
+    extension: dict[str, Any],
+    step: Step | None,
+    points: int | None,
+    evidence_key: str,
+) -> dict[str, Any]:
+    return {
+        "sdl_behavior_specification": spec_id,
+        "canonical_steps": [step.path_step] if step else [],
+        "delivery": {
+            "interfaces": _string_list(extension.get("interfaces")),
+            "live_fire": bool(extension.get("live_fire")),
+        },
+        "scoring": {
+            "id": _text(extension, "outcome"),
+            "points": points,
+            "evidence": [evidence_key] if evidence_key else [],
+            "description": _text(extension, "proof_obligation"),
+        },
+        "readiness": {
+            "sdl_challenge": True,
+            "module": step is not None,
+            "scoring": points is not None,
+            "evidence": bool(evidence_key),
+            "runtime": _sdl_challenge_implemented(extension),
+        },
+        "sdl_challenge": _sdl_challenge_detail_metadata(spec_id, extension),
+    }
+
+
+def _sdl_challenge_detail_metadata(spec_id: str, extension: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "challenge_id": _text(extension, "challenge_id") or spec_id,
+        "disposition": _text(extension, "disposition"),
+        "prerequisites": _string_list(extension.get("prerequisites")),
+        "hint_costs": [
+            value for value in _sequence(extension, "hint_costs") if isinstance(value, int)
+        ],
+        "target_minutes": _int_or_none(extension.get("target_minutes")),
+        "min_minutes": _int_or_none(extension.get("min_minutes")),
+        "max_minutes": _int_or_none(extension.get("max_minutes")),
+        "telemetry_profile": _text(extension, "telemetry_profile"),
+        "proof_obligation": _text(extension, "proof_obligation"),
+        "reliability": _text(extension, "reliability"),
+        "implementation_status": _text(extension, "implementation_status"),
+        "issue": _int_or_none(extension.get("issue")),
+    }
+
+
+def _link_sdl_challenge_techniques(
+    challenge: Challenge, step: Step | None, context: SdlChallengeContext
+) -> None:
+    if step and context.techniques_by_step.get(step.path_step):
+        challenge.techniques.set(context.techniques_by_step[step.path_step])
+
+
+def _load_sdl_challenge_evidence(
+    challenge: Challenge,
+    revision: Revision,
+    spec_id: str,
+    extension: dict[str, Any],
+    evidence_key: str,
+) -> None:
+    if not evidence_key:
+        return
+
+    proof_obligation = _text(extension, "proof_obligation")
+    evidence, _ = Evidence.objects.get_or_create(
+        revision=revision,
+        evidence_id=evidence_key,
+        defaults={"description": f"Proof obligation: {proof_obligation}"},
+    )
+    if not evidence.description:
+        evidence.description = f"Proof obligation: {proof_obligation}"
+        evidence.save(update_fields=["description"])
+    ChallengeEvidenceRequirement.objects.create(
+        challenge=challenge,
+        evidence=evidence,
+        evidence_key=evidence_key,
+        predicate=proof_obligation,
+        source_path=f"sdl:{spec_id}",
+        event_kind=_text(extension, "telemetry_profile"),
+        proof_fields=[],
+    )
 
 
 def _load_challenge_evidence(
@@ -1389,24 +1624,46 @@ def _runtime_candidates(pack_dir: Path) -> list[Path]:
 
 def _extract_runtime_rows(parsed: ast.Module) -> dict[str, dict[str, Any]]:
     constants = _module_string_constants(parsed)
+    assignment = _quick_challenges_assignment(parsed)
+    if assignment is None:
+        return {}
+
+    try:
+        value = _literal_with_constants(assignment.value, constants)
+    except ValueError:
+        return {}
+    return _runtime_rows_from_literal(value)
+
+
+def _quick_challenges_assignment(parsed: ast.Module) -> ast.Assign | None:
     for node in parsed.body:
         if isinstance(node, ast.Assign) and _assigned_to(node, "QUICK_CHALLENGES"):
-            try:
-                value = _literal_with_constants(node.value, constants)
-            except ValueError:
-                return {}
-            if isinstance(value, (list, tuple)):
-                rows = {}
-                for item in value:
-                    if isinstance(item, dict):
-                        outcome_id = item.get("id")
-                        if isinstance(outcome_id, str) and outcome_id:
-                            rows[outcome_id] = {
-                                "title": str(item.get("title") or ""),
-                                "entrypoint": str(item.get("entrypoint") or ""),
-                            }
-                return rows
-    return {}
+            return node
+    return None
+
+
+def _runtime_rows_from_literal(value: object) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, (list, tuple)):
+        return {}
+
+    rows = {}
+    for item in value:
+        row = _runtime_row(item)
+        if row is not None:
+            rows[row[0]] = row[1]
+    return rows
+
+
+def _runtime_row(item: object) -> tuple[str, dict[str, str]] | None:
+    if not isinstance(item, dict):
+        return None
+    outcome_id = item.get("id")
+    if not isinstance(outcome_id, str) or not outcome_id:
+        return None
+    return outcome_id, {
+        "title": str(item.get("title") or ""),
+        "entrypoint": str(item.get("entrypoint") or ""),
+    }
 
 
 def _module_string_constants(parsed: ast.Module) -> dict[str, str]:
@@ -1429,17 +1686,19 @@ def _assigned_to(node: ast.Assign, name: str) -> bool:
 
 def _literal_with_constants(node: ast.AST, constants: dict[str, str]) -> object:
     if isinstance(node, ast.Name) and node.id in constants:
-        return constants[node.id]
-    if isinstance(node, ast.Constant):
-        return node.value
-    if isinstance(node, ast.Tuple):
-        return tuple(_literal_with_constants(item, constants) for item in node.elts)
-    if isinstance(node, ast.List):
-        return [_literal_with_constants(item, constants) for item in node.elts]
-    if isinstance(node, ast.Dict):
-        return {
+        value = constants[node.id]
+    elif isinstance(node, ast.Constant):
+        value = node.value
+    elif isinstance(node, ast.Tuple):
+        value = tuple(_literal_with_constants(item, constants) for item in node.elts)
+    elif isinstance(node, ast.List):
+        value = [_literal_with_constants(item, constants) for item in node.elts]
+    elif isinstance(node, ast.Dict):
+        value = {
             _literal_with_constants(key, constants): _literal_with_constants(value, constants)
             for key, value in zip(node.keys, node.values, strict=True)
             if key is not None
         }
-    raise ValueError("unsupported literal")
+    else:
+        raise ValueError("unsupported literal")
+    return value

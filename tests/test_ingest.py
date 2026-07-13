@@ -346,13 +346,15 @@ def test_management_command(scenario):
 
 @pytest.mark.django_db
 def test_management_command_unknown_scenario():
+    sample_path = str(SAMPLE)
     with pytest.raises(CommandError):
-        call_command("import_projection", str(SAMPLE), scenario="missing")
+        call_command("import_projection", sample_path, scenario="missing")
 
 
 def test_management_command_bad_path(scenario):
+    bad_path = str(SAMPLE.parent / "nope.yaml")
     with pytest.raises(CommandError):
-        call_command("import_projection", str(SAMPLE.parent / "nope.yaml"), scenario="demo")
+        call_command("import_projection", bad_path, scenario="demo")
 
 
 @pytest.mark.django_db
@@ -401,10 +403,11 @@ def test_sync_scenario_command_grants_user_access():
 
 @pytest.mark.django_db
 def test_sync_scenario_command_unknown_grant_user():
+    sample_path = str(SAMPLE.parent)
     with pytest.raises(CommandError):
         call_command(
             "sync_scenario",
-            str(SAMPLE.parent),
+            sample_path,
             slug="demo",
             grant_user="missing@example.com",
         )

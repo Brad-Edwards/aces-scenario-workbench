@@ -103,24 +103,29 @@ class Command(BaseCommand):
 
     def _grant_user(self, scenario: Scenario, options: dict[str, Any]) -> str | None:
         email = options["grant_user"]
-        if not email:
-            return None
+        status = None
 
-        User = get_user_model()
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist as exc:
-            raise CommandError(f"No user with email '{email}'.") from exc
+        if email:
+            user_model = get_user_model()
+            try:
+                user = user_model.objects.get(email=email)
+            except user_model.DoesNotExist as exc:
+                raise CommandError(f"No user with email '{email}'.") from exc
+            status = self._sync_membership(scenario, user, options["role"])
 
+        return status
+
+    def _sync_membership(self, scenario: Scenario, user: object, role: str) -> str:
         membership, created = Membership.objects.get_or_create(
             scenario=scenario,
             user=user,
-            defaults={"role": options["role"]},
+            defaults={"role": role},
         )
+        status = "unchanged"
         if created:
-            return "created"
-        if membership.role != options["role"]:
-            membership.role = options["role"]
+            status = "created"
+        elif membership.role != role:
+            membership.role = role
             membership.save(update_fields=["role", "updated_at"])
-            return "updated"
-        return "unchanged"
+            status = "updated"
+        return status
