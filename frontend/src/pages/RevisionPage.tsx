@@ -23,7 +23,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "topology", label: "Topology" },
   { key: "schedule", label: "Schedule" },
   { key: "modules", label: "Modules" },
-  { key: "techniques", label: "Techniques" },
+  { key: "techniques", label: "Behaviors" },
   { key: "evidence", label: "Evidence" },
   { key: "scoring", label: "Scoring" },
   { key: "environment", label: "Environment" },
@@ -59,7 +59,7 @@ export function RevisionPage() {
           label="Challenges"
           value={`${revision.summary.implementedChallengeCount} implemented / ${revision.summary.plannedChallengeCount} planned`}
         />
-        <SummaryCard label="TTPs" value={revision.summary.techniqueCount} />
+        <SummaryCard label="Behaviors" value={revision.summary.techniqueCount} />
         <SummaryCard label="Evidence objects" value={revision.summary.evidenceCount} />
       </div>
 
@@ -83,7 +83,7 @@ export function RevisionPage() {
       {active === "topology" ? <TopologyView revision={revision} /> : null}
       {active === "schedule" ? <ScheduleTable revision={revision} /> : null}
       {active === "modules" ? <ModulesTable revision={revision} /> : null}
-      {active === "techniques" ? <TechniquesTable revision={revision} /> : null}
+      {active === "techniques" ? <BehaviorsTable revision={revision} /> : null}
       {active === "evidence" ? <EvidenceTable revision={revision} /> : null}
       {active === "scoring" ? <ScoringView revision={revision} /> : null}
       {active === "environment" ? <EnvironmentView revision={revision} /> : null}
@@ -116,7 +116,7 @@ function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
               <Th>Difficulty</Th>
               <Th>Evidence</Th>
               <Th className="text-right">Readiness</Th>
-              <Th className="text-right">TTPs</Th>
+              <Th className="text-right">Behaviors</Th>
               <Th className="text-right">Points</Th>
               <Th className="text-right">Comments</Th>
               <Th className="text-right">Decisions</Th>
@@ -509,7 +509,7 @@ function ScheduleTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) 
               <Th>Challenges</Th>
               <Th className="text-right">Minutes</Th>
               <Th className="text-right">Evidence</Th>
-              <Th className="text-right">TTPs</Th>
+              <Th className="text-right">Behaviors</Th>
             </tr>
           </thead>
           <tbody>
@@ -570,7 +570,7 @@ function ModulesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
               <Th>Tier</Th>
               <Th>Objective</Th>
               <Th className="text-right">Minutes</Th>
-              <Th className="text-right">Techniques</Th>
+              <Th className="text-right">Behaviors</Th>
               <Th className="text-right">Evidence</Th>
               <Th className="text-right">Comments</Th>
               <Th className="text-right">Decisions</Th>
@@ -604,7 +604,7 @@ function ModulesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
   );
 }
 
-function TechniquesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
+function BehaviorsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
   return (
     <Card className="overflow-hidden py-0">
       <Table>
@@ -613,7 +613,7 @@ function TechniquesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
             <Th>ID</Th>
             <Th>Name</Th>
             <Th>Module</Th>
-            <Th>Tactics</Th>
+            <Th>Behavior refs</Th>
             <Th>Evidence</Th>
             <Th>Planned action</Th>
             <Th className="text-right">Comments</Th>
@@ -673,7 +673,7 @@ function EvidenceTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) 
           <tr className="border-b border-border">
             <Th>ID</Th>
             <Th>Description</Th>
-            <Th className="text-right">Techniques</Th>
+            <Th className="text-right">Behaviors</Th>
             <Th className="text-right">Comments</Th>
             <Th className="text-right">Decisions</Th>
           </tr>

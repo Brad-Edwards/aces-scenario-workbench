@@ -27,14 +27,14 @@
   {% endif %}
 
   <section class="panel">
-    <h2>Techniques in this module</h2>
+    <h2>Behaviors in this module</h2>
     <ul class="card-list">
       {% for technique in object.techniques.all %}
         <li>
           <a href="{% url 'technique-detail' scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
         </li>
       {% empty %}
-        <li class="empty">No techniques mapped to this module.</li>
+        <li class="empty">No behaviors mapped to this module.</li>
       {% endfor %}
     </ul>
   </section>

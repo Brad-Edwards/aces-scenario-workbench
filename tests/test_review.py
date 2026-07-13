@@ -45,9 +45,9 @@ def test_revision_overview_renders(client, workspace):
     response = client.get(reverse("revision-overview", args=_args(scenario, revision)))
     assert response.status_code == 200
     assert b"Coverage overview" in response.content
-    assert b"Technique relationships by tactic" in response.content
+    assert b"Behavior relationships by ref" in response.content
     assert b"Challenge progression" in response.content
-    assert b"Techniques" in response.content
+    assert b"Behaviors" in response.content
     assert b"AML.T0000" in response.content
     assert b"Modules" in response.content
     assert b"Planned in-world variant" in response.content
@@ -62,13 +62,11 @@ def test_object_detail_pages(client, workspace):
         ): b"Planned action",
         reverse(
             "tactic-detail", args=[*_args(scenario, revision), "AML.TA0002"]
-        ): b"Techniques in this tactic",
-        reverse(
-            "step-detail", args=[*_args(scenario, revision), "1"]
-        ): b"Techniques in this module",
+        ): b"Behaviors using this ref",
+        reverse("step-detail", args=[*_args(scenario, revision), "1"]): b"Behaviors in this module",
         reverse(
             "evidence-detail", args=[*_args(scenario, revision), "ev-recon"]
-        ): b"Techniques requiring this evidence",
+        ): b"Behaviors requiring this evidence",
     }
     for url, needle in checks.items():
         response = client.get(url)
@@ -119,7 +117,7 @@ def test_revision_overview_has_filter_toolbar(client, workspace):
     response = client.get(reverse("revision-overview", args=_args(scenario, revision)))
     for field in (b'name="q"', b'name="module"', b'name="tactic"', b'name="level"'):
         assert field in response.content
-    assert b"Showing 3 of 3 techniques" in response.content
+    assert b"Showing 3 of 3 behaviors" in response.content
     assert b'class="top-metric"' in response.content
     assert b'class="bar-row"' in response.content
     assert b'class="progress-step"' in response.content
@@ -151,7 +149,7 @@ def test_technique_filters_combine(client, workspace):
     client.force_login(member)
     url = reverse("revision-overview", args=_args(scenario, revision))
     response = client.get(url, {"tactic": "AML.TA0002", "level": "quick"})
-    assert b"Showing 2 of 3 techniques matching your filters" in response.content
+    assert b"Showing 2 of 3 behaviors matching your filters" in response.content
     assert _link(scenario, revision, "AML.T0015") not in response.content
 
 
@@ -160,8 +158,8 @@ def test_technique_search_no_match(client, workspace):
     client.force_login(member)
     url = reverse("revision-overview", args=_args(scenario, revision))
     response = client.get(url, {"q": "no-such-technique-xyz"})
-    assert b"Showing 0 of 3 techniques" in response.content
-    assert b"No techniques match your filters." in response.content
+    assert b"Showing 0 of 3 behaviors" in response.content
+    assert b"No behaviors match your filters." in response.content
 
 
 def test_techniques_paginate(client, workspace):

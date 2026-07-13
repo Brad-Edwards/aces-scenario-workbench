@@ -7,20 +7,20 @@
     <a href="{% url 'dashboard' %}">Scenarios</a> /
     <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
     <a href="{% url 'revision-overview' scenario.slug revision.pk %}">{{ revision.label }}</a> /
-    Tactic
+    Behavior ref
   </p>
   <h1>{{ object.tactic_id }}</h1>
   <p class="subhead">{{ object.name }}</p>
 
   <section class="panel">
-    <h2>Techniques in this tactic</h2>
+    <h2>Behaviors using this ref</h2>
     <ul class="card-list">
       {% for technique in object.techniques.all %}
         <li>
           <a href="{% url 'technique-detail' scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
         </li>
       {% empty %}
-        <li class="empty">No techniques mapped to this tactic.</li>
+        <li class="empty">No behaviors mapped to this ref.</li>
       {% endfor %}
     </ul>
   </section>

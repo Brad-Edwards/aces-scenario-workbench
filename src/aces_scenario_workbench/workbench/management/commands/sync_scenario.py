@@ -12,13 +12,12 @@ from ...models import Membership, Role, Scenario
 
 
 class Command(BaseCommand):
-    help = (
-        "Create or update a scenario and import a pack's ATLAS technique projection "
-        "as an immutable revision."
-    )
+    help = "Create or update a scenario and import SDL-first pack content as an immutable revision."
 
     def add_arguments(self, parser: CommandParser) -> None:
-        parser.add_argument("path", help="Projection file, or a pack directory containing one.")
+        parser.add_argument(
+            "path", help="Pack directory containing SDL modules or legacy projection files."
+        )
         parser.add_argument(
             "--slug",
             help="Scenario slug. Defaults to a slugified version of the input directory name.",

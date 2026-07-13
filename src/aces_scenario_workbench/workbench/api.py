@@ -114,7 +114,7 @@ def _decision_activity_row(decision: Decision) -> dict[str, object]:
 @login_required
 @require_POST
 def upload_revision(request: HttpRequest, slug: str) -> HttpResponse:
-    """Ingest a projection uploaded for a scenario (author/administrator only)."""
+    """Ingest a legacy projection uploaded for a scenario (author/administrator only)."""
     scenario = get_object_or_404(Scenario, slug=slug)
     if authz.user_role(request.user, scenario) not in _ALLOWED_ROLES:
         return JsonResponse({"detail": "You do not have permission to upload."}, status=403)

@@ -10,7 +10,7 @@ from ...models import Scenario
 
 
 class Command(BaseCommand):
-    help = "Import an ACES scenario pack's ATLAS technique projection as a revision."
+    help = "Import a legacy ACES projection as a revision."
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("path", help="Projection file, or a pack directory containing one.")

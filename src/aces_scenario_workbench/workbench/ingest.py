@@ -1,10 +1,12 @@
-"""Ingest an ACES scenario pack's ATLAS technique projection.
+"""Ingest ACES scenario content into the workbench revision graph.
 
-A projection is parsed into an immutable :class:`Revision` and its content
-objects (tactics, steps, evidence, techniques). Ingestion is idempotent: a
-revision is identified by a content digest, so re-importing identical content is
-a no-op while changed content creates a new revision. The workbench never writes
-back into a pack.
+SDL modules are preferred as the authoritative scenario source when present.
+Legacy projection files are still accepted for backwards compatibility and as
+optional enrichment around SDL-defined modules. Imported content becomes an
+immutable :class:`Revision` with its content objects. Ingestion is idempotent:
+a revision is identified by a content digest, so re-importing identical content
+is a no-op while changed content creates a new revision. The workbench never
+writes back into a pack.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -158,7 +161,7 @@ def _resolve_in_directory(directory: Path) -> Path:
         found = directory / candidate
         if found.is_file():
             return found
-    raise ProjectionError(f"No ATLAS technique projection found under {directory}.")
+    raise ProjectionError(f"No legacy projection found under {directory}.")
 
 
 def _digest(data: dict[str, Any]) -> str:
@@ -172,6 +175,125 @@ def _content_digest(projection: dict[str, Any], contracts: dict[str, Any]) -> st
     return _digest({"projection": projection, "contracts": contracts})
 
 
+def _sdl_defines_modules(sdl: object) -> bool:
+    return isinstance(sdl, dict) and bool(
+        _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
+    )
+
+
+def _projection_from_sdl(sdl: dict[str, Any], projection: dict[str, Any]) -> dict[str, Any]:
+    """Adapt SDL behavior specifications into the workbench's revision graph shape."""
+    behavior_specs = _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
+    framework = _mapping(projection, "framework")
+    steps_by_behavior = {
+        _text(row, "aces_behavior_specification"): row
+        for row in _entries(projection, "steps")
+        if _text(row, "aces_behavior_specification")
+    }
+    steps_by_id = {_text(row, "path_step"): row for row in _entries(projection, "steps")}
+    steps = []
+    tactic_ids: set[str] = set()
+    techniques = []
+
+    for index, (behavior_id, spec) in enumerate(sorted(behavior_specs.items()), start=1):
+        spec = spec if isinstance(spec, dict) else {}
+        path_step = _path_step_from_behavior_id(behavior_id, index)
+        enrichment = steps_by_behavior.get(behavior_id) or steps_by_id.get(path_step, {})
+        refs = _sdl_behavior_refs(spec)
+        tactic_ids.update(refs)
+        evidence = _string_list(enrichment.get("evidence"))
+        steps.append(
+            {
+                "path_step": path_step,
+                "aces_behavior_specification": behavior_id,
+                "tier": _text(enrichment, "tier")
+                or _text_any(spec, "lifecycle_state", "lifecycle-state"),
+                "surface": _text(enrichment, "surface") or _surface_from_behavior_id(behavior_id),
+                "estimated_minutes": enrichment.get("estimated_minutes"),
+                "objective": _text(enrichment, "objective")
+                or f"Exercise SDL behavior specification {behavior_id}.",
+                "evidence": evidence,
+                "flag_outcome": _text(enrichment, "flag_outcome"),
+                "justification": _text(enrichment, "justification")
+                or "Defined by the ACES SDL behavior specification.",
+            }
+        )
+        for ref in refs:
+            techniques.append(
+                {
+                    "id": _sdl_technique_id(path_step, ref),
+                    "name": _behavior_ref_name(ref),
+                    "tactics": [ref],
+                    "challenge_step": path_step,
+                    "surface": behavior_id,
+                    "evidence": evidence[0] if evidence else "",
+                    "relationship": "sdl_behavior_ref",
+                    "coverage_status": _text_any(spec, "lifecycle_state", "lifecycle-state"),
+                    "planned_action": f"Exercise {ref} through {behavior_id}.",
+                    "rationale": "Derived from ACES SDL ai_offensive_behavior_refs.",
+                }
+            )
+
+    return {
+        "schema_version": 1,
+        "mapping_id": f"{_text(sdl, 'name', 'scenario')}-sdl-{_text(sdl, 'version', 'revision')}",
+        "pack": _text(sdl, "name"),
+        "source_oracle": "sdl",
+        "semantic_binding": {"source": "aces-sdl", "parser": _text(sdl, "parser")},
+        "framework": framework
+        or {
+            "name": "ACES SDL",
+            "release": _text(sdl, "version"),
+        },
+        "experience_contract": _mapping(projection, "experience_contract"),
+        "steps": steps,
+        "tactic_modules": [
+            {
+                "tactic_id": tactic_id,
+                "name": _behavior_ref_name(tactic_id),
+                "challenge_steps": sorted(
+                    {
+                        row["challenge_step"]
+                        for row in techniques
+                        if tactic_id in _string_list(row.get("tactics"))
+                    }
+                ),
+            }
+            for tactic_id in sorted(tactic_ids)
+        ],
+        "technique_catalog": techniques,
+    }
+
+
+def _path_step_from_behavior_id(behavior_id: str, index: int) -> str:
+    match = re.search(r"(?:^|-)module-(\d+)", behavior_id)
+    if match:
+        return str(int(match.group(1)))
+    match = re.search(r"(?:^|-)m(?:odule)?[-_]?(\d+)", behavior_id, re.IGNORECASE)
+    if match:
+        return str(int(match.group(1)))
+    return str(index)
+
+
+def _surface_from_behavior_id(behavior_id: str) -> str:
+    match = re.match(r"module-\d+-(.+)", behavior_id)
+    return match.group(1) if match else behavior_id
+
+
+def _sdl_behavior_refs(spec: dict[str, Any]) -> list[str]:
+    return _string_list(spec.get("ai_offensive_behavior_refs")) or _string_list(
+        spec.get("ai-offensive-behavior-refs")
+    )
+
+
+def _sdl_technique_id(path_step: str, behavior_ref: str) -> str:
+    return f"SDL.{path_step}.{behavior_ref}"[:32]
+
+
+def _behavior_ref_name(behavior_ref: str) -> str:
+    return behavior_ref.replace("-", " ").replace("_", " ").title()
+
+
 @transaction.atomic
 def import_projection(scenario: Scenario, data: dict[str, Any]) -> tuple[Revision, bool]:
     """Import a projection into ``scenario``; returns ``(revision, created)``."""
@@ -180,8 +302,21 @@ def import_projection(scenario: Scenario, data: dict[str, Any]) -> tuple[Revisio
 
 def import_pack(scenario: Scenario, path: Path) -> tuple[Revision, bool]:
     """Import a full pack directory when available, including challenge contracts."""
-    data, _ = load_projection(path)
     contracts = load_pack_contracts(path)
+    projection_error: ProjectionError | None = None
+    try:
+        projection, _ = load_projection(path)
+    except ProjectionError as exc:
+        projection = {}
+        projection_error = exc
+    if _sdl_defines_modules(contracts.get("sdl", {})):
+        data = _projection_from_sdl(contracts["sdl"], projection)
+    elif projection:
+        data = projection
+    elif projection_error:
+        raise projection_error
+    else:
+        raise ProjectionError(f"No importable scenario content found under {path}.")
     return _import_revision(scenario, data, contracts, _content_digest(data, contracts))
 
 

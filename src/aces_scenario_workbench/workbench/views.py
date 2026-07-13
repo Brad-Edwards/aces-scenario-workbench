@@ -79,7 +79,7 @@ def scenario_activity(request: HttpRequest, slug: str) -> HttpResponse:
 
 
 def _filter_techniques(revision: Revision, filters: dict[str, str]) -> QuerySet[Technique]:
-    """Techniques for a revision, narrowed by the search box and dropdown filters."""
+    """Behavior rows for a revision, narrowed by the search box and dropdown filters."""
     techniques = (
         revision.techniques.select_related("step", "evidence")
         .prefetch_related("tactics")
@@ -209,7 +209,7 @@ def technique_detail(
     revision = access.scoped_revision(request, scenario_slug, revision_pk)
     technique = get_object_or_404(Technique, revision=revision, technique_id=technique_id)
     context = _object_context(
-        request, revision, technique, "Technique", ObjectType.TECHNIQUE, technique.technique_id
+        request, revision, technique, "Behavior", ObjectType.TECHNIQUE, technique.technique_id
     )
     return render(request, "workbench/technique_detail.html", context)
 
@@ -222,7 +222,7 @@ def tactic_detail(
     revision = access.scoped_revision(request, scenario_slug, revision_pk)
     tactic = get_object_or_404(Tactic, revision=revision, tactic_id=tactic_id)
     context = _object_context(
-        request, revision, tactic, "Tactic", ObjectType.TACTIC, tactic.tactic_id
+        request, revision, tactic, "Behavior ref", ObjectType.TACTIC, tactic.tactic_id
     )
     return render(request, "workbench/tactic_detail.html", context)
 

@@ -68,7 +68,10 @@ def test_import_pack_creates_planned_and_implemented_challenges(scenario):
     assert challenge.step.path_step == "1"
     assert challenge.implemented is True
     assert challenge.runtime_entrypoint == "/v1/infer"
-    assert challenge.techniques.count() == 2
+    assert challenge.techniques.count() == 1
+    assert list(challenge.techniques.values_list("technique_id", flat=True)) == [
+        "SDL.1.reconnaissance"
+    ]
     assert challenge.metadata["readiness"] == {
         "challenge_contract": True,
         "placement": True,
@@ -111,6 +114,26 @@ def test_import_pack_creates_planned_and_implemented_challenges(scenario):
     ]
     assert revision.metadata["topology"]["coverage"]["sdl_node_count"] == 2
     assert revision.metadata["topology"]["coverage"]["contract_asset_count"] == 1
+
+
+def test_import_pack_uses_sdl_without_legacy_projection(scenario, tmp_path):
+    pack = tmp_path / "sdl-only-pack"
+    shutil.copytree(SAMPLE.parent / "sdl", pack / "sdl")
+
+    revision, created = import_pack(scenario, pack)
+
+    assert created is True
+    assert revision.mapping_id == "sample-scenario-sdl-1.0.0"
+    assert revision.metadata["semantic_binding"] == {"source": "aces-sdl", "parser": "aces-sdl"}
+    assert revision.challenges.count() == 0
+    assert revision.steps.count() == 2
+    assert revision.techniques.count() == 2
+    assert list(revision.techniques.values_list("technique_id", flat=True)) == [
+        "SDL.1.reconnaissance",
+        "SDL.2.defense-evasion",
+    ]
+    assert revision.metadata["topology"]["source"] == "sdl"
+    assert revision.metadata["topology"]["nodes"][0]["id"] == "participant-workstation"
 
 
 def test_changed_challenge_contract_creates_new_revision(scenario, tmp_path):

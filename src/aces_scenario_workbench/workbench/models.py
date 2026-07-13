@@ -184,8 +184,8 @@ class Technique(models.Model):
 
     @property
     def is_subtechnique(self) -> bool:
-        # ATLAS ids carry an "AML." prefix, so a sub-technique (AML.T0000.000)
-        # is distinguished by a second dot beyond the one in the base id.
+        # Legacy dotted identifiers distinguish sub-items by a second dot beyond
+        # the one in the base id.
         return self.technique_id.count(".") > 1
 
     @property

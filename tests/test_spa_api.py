@@ -116,17 +116,19 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     payload = response.json()
     first_module = next(module for module in payload["modules"] if module["id"] == "1")
     first_technique = next(
-        technique for technique in payload["techniques"] if technique["id"] == "AML.T0000"
+        technique
+        for technique in payload["techniques"]
+        if technique["id"] == "SDL.1.reconnaissance"
     )
     assert first_module["commentCount"] == 1
     assert first_module["decisionCount"] == 1
     assert first_module["behaviorSpecification"] == "module-01-recon"
     assert first_module["flagOutcome"] == "recon"
     assert first_module["justification"] == "Directly selectable reconnaissance action."
-    assert first_technique["surface"] == "research-workbench"
-    assert first_technique["relationship"] == "planned_variant"
-    assert first_technique["coverageStatus"] == "planned"
-    assert first_technique["rationale"] == "A reconnaissance variant satisfied only by ev-recon."
+    assert first_technique["surface"] == "module-01-recon"
+    assert first_technique["relationship"] == "sdl_behavior_ref"
+    assert first_technique["coverageStatus"] == "draft"
+    assert first_technique["rationale"] == "Derived from ACES SDL ai_offensive_behavior_refs."
     recon_challenge = next(
         challenge for challenge in payload["challenges"] if challenge["id"] == "flag-recon"
     )
@@ -153,7 +155,7 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert recon_challenge["status"] == "Implemented"
     assert recon_challenge["readiness"]["runtime"] is True
     assert recon_challenge["scoring"]["points"] == 100
-    assert recon_challenge["techniqueIds"] == ["AML.T0000", "AML.T0000.000"]
+    assert recon_challenge["techniqueIds"] == ["SDL.1.reconnaissance"]
     assert recon_challenge["evidenceRequirements"][0]["evidenceId"] == "ev-recon"
     assert recon_challenge["evidenceRequirements"][0]["eventKind"] == "recon_verdict"
     assert recon_challenge["evidenceRequirements"][0]["proofFields"] == [
@@ -193,9 +195,9 @@ def test_spa_comment_endpoint_allows_challenges_and_ttps(client, spa_workspace):
     technique_response = client.post(
         reverse(
             "api-object-comment",
-            args=[revision.pk, ObjectType.TECHNIQUE, "AML.T0000"],
+            args=[revision.pk, ObjectType.TECHNIQUE, "SDL.1.reconnaissance"],
         ),
-        data=json.dumps({"body": "Tie this TTP back to the implemented path."}),
+        data=json.dumps({"body": "Tie this behavior back to the implemented path."}),
         content_type="application/json",
     )
 
@@ -210,13 +212,15 @@ def test_spa_comment_endpoint_allows_challenges_and_ttps(client, spa_workspace):
     assert Comment.objects.filter(
         revision=revision,
         object_type=ObjectType.TECHNIQUE,
-        object_stable_id="AML.T0000",
-        body="Tie this TTP back to the implemented path.",
+        object_stable_id="SDL.1.reconnaissance",
+        body="Tie this behavior back to the implemented path.",
     ).exists()
 
     workspace = client.get(reverse("api-revision-workspace", args=[revision.pk])).json()
     challenge = next(item for item in workspace["challenges"] if item["id"] == "flag-recon")
-    technique = next(item for item in workspace["techniques"] if item["id"] == "AML.T0000")
+    technique = next(
+        item for item in workspace["techniques"] if item["id"] == "SDL.1.reconnaissance"
+    )
     assert challenge["commentCount"] == 1
     assert technique["commentCount"] == 1
 
@@ -238,7 +242,7 @@ def test_spa_decision_endpoint_allows_challenges_only(client, spa_workspace):
     technique_response = client.post(
         reverse(
             "api-object-decision",
-            args=[revision.pk, ObjectType.TECHNIQUE, "AML.T0000"],
+            args=[revision.pk, ObjectType.TECHNIQUE, "SDL.1.reconnaissance"],
         ),
         data=json.dumps(
             {"decision": DecisionType.ACCEPT, "rationale": "Should not be accepted here."}
@@ -258,7 +262,7 @@ def test_spa_decision_endpoint_allows_challenges_only(client, spa_workspace):
     assert not Decision.objects.filter(
         revision=revision,
         object_type=ObjectType.TECHNIQUE,
-        object_stable_id="AML.T0000",
+        object_stable_id="SDL.1.reconnaissance",
         decision=DecisionType.ACCEPT,
     ).exists()
 

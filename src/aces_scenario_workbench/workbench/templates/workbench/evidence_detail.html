@@ -13,14 +13,14 @@
   {% if object.description %}<p class="subhead">{{ object.description }}</p>{% endif %}
 
   <section class="panel">
-    <h2>Techniques requiring this evidence</h2>
+    <h2>Behaviors requiring this evidence</h2>
     <ul class="card-list">
       {% for technique in object.techniques.all %}
         <li>
           <a href="{% url 'technique-detail' scenario.slug revision.pk technique.technique_id %}">{{ technique.technique_id }} — {{ technique.name }}</a>
         </li>
       {% empty %}
-        <li class="empty">No techniques reference this evidence.</li>
+        <li class="empty">No behaviors reference this evidence.</li>
       {% endfor %}
     </ul>
   </section>

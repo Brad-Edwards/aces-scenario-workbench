@@ -7,7 +7,7 @@
     <a href="{% url 'dashboard' %}">Scenarios</a> /
     <a href="{% url 'scenario-detail' scenario.slug %}">{{ scenario.name }}</a> /
     <a href="{% url 'revision-overview' scenario.slug revision.pk %}">{{ revision.label }}</a> /
-    Technique
+    Behavior
   </p>
   <h1>{{ object.technique_id }}</h1>
   <p class="subhead">{{ object.name }}</p>
@@ -17,8 +17,8 @@
       <dt>Surface</dt><dd>{{ object.surface|default:"—" }}</dd>
       <dt>Coverage status</dt><dd>{{ object.coverage_status|default:"—" }}</dd>
       <dt>Relationship</dt><dd>{{ object.relationship|default:"—" }}</dd>
-      <dt>Sub-technique</dt><dd>{{ object.is_subtechnique|yesno }}</dd>
-      <dt>Tactics</dt>
+      <dt>Sub-item</dt><dd>{{ object.is_subtechnique|yesno }}</dd>
+      <dt>Behavior refs</dt>
       <dd>
         {% for tactic in object.tactics.all %}
           <a class="tag" href="{% url 'tactic-detail' scenario.slug revision.pk tactic.tactic_id %}">{{ tactic.tactic_id }}</a>

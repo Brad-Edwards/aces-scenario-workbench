@@ -83,7 +83,7 @@ function ModuleDetail({
             label="Estimated time"
             value={module.minutes == null ? "—" : `${module.minutes} minutes`}
           />
-          <DetailItem label="Techniques" value={module.techniqueCount} />
+          <DetailItem label="Behaviors" value={module.techniqueCount} />
           <DetailItem label="Evidence" value={module.evidenceCount} />
         </DetailGrid>
         <LongText label="Objective" value={module.objective} />
@@ -94,7 +94,7 @@ function ModuleDetail({
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <div className="space-y-6">
           <RelatedChallengesTable revision={revision} challenges={challenges} title="Challenges in this module" />
-          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Techniques in this module" />
+          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Behaviors in this module" />
           <RelatedEvidenceTable revision={revision} evidence={evidence} title="Evidence referenced by this module" />
         </div>
         <ActivityPanel revision={revision} objectType="step" objectId={module.id} />
@@ -111,7 +111,7 @@ function TechniqueDetail({
   techniqueId: string;
 }>) {
   const technique = revision.techniques.find((candidate) => candidate.id === techniqueId);
-  if (!technique) return <MissingObject revision={revision} label="technique" />;
+  if (!technique) return <MissingObject revision={revision} label="behavior" />;
 
   const module = revision.modules.find((candidate) => candidate.id === technique.module);
   const evidence = revision.evidence.find((candidate) => candidate.id === technique.evidence);
@@ -130,7 +130,7 @@ function TechniqueDetail({
         <div className="space-y-6">
           <Card className="p-6">
             <DetailGrid>
-              <DetailItem label="Technique ID" value={technique.id} mono />
+              <DetailItem label="Behavior ID" value={technique.id} mono />
               <DetailItem label="Module">
                 {module ? (
                   <Link to={modulePath(revision.id, module.id)} className="hover:underline">
@@ -154,7 +154,7 @@ function TechniqueDetail({
               <DetailItem label="Coverage" value={technique.coverageStatus || "—"} />
             </DetailGrid>
             <div className="mb-5">
-              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Tactics</h2>
+              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Behavior refs</h2>
               {technique.tactics.length ? (
                 <div className="flex flex-wrap gap-2">
                   {technique.tactics.map((tactic) => (
@@ -162,7 +162,7 @@ function TechniqueDetail({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No tactics linked.</p>
+                <p className="text-sm text-muted-foreground">No behavior refs linked.</p>
               )}
             </div>
             <LongText label="Planned action" value={technique.plannedAction} />
@@ -214,14 +214,14 @@ function EvidenceDetail({
           <Card className="p-6">
             <DetailGrid>
               <DetailItem label="Evidence ID" value={evidence.id} mono />
-              <DetailItem label="Linked techniques" value={evidence.techniqueCount} />
+              <DetailItem label="Linked behaviors" value={evidence.techniqueCount} />
               <DetailItem label="Comments" value={evidence.commentCount} />
               <DetailItem label="Decisions" value={evidence.decisionCount} />
             </DetailGrid>
             <LongText label="Description" value={evidence.description} />
           </Card>
           <RelatedChallengesTable revision={revision} challenges={challenges} title="Challenges requiring this evidence" />
-          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Techniques using this evidence" />
+          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Behaviors using this evidence" />
         </div>
         <ActivityPanel revision={revision} objectType="evidence" objectId={evidence.id} />
       </div>
@@ -309,7 +309,7 @@ function ChallengeDetail({
           </Card>
 
           <EvidenceRequirementsTable revision={revision} challenge={challenge} />
-          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Related TTPs" />
+          <RelatedTechniquesTable revision={revision} techniques={techniques} title="Related behaviors" />
           <RelatedEvidenceTable revision={revision} evidence={evidence} title="Required evidence objects" />
         </div>
         <ActivityPanel
@@ -341,7 +341,7 @@ function ObjectHeader({
       description={description}
       actions={
         <Link to={revisionPath(revision.id, backTab)} className="text-sm text-muted-foreground hover:text-foreground">
-          Back to {backTab}
+          Back to {workspaceTabLabel(backTab)}
         </Link>
       }
     />
@@ -427,7 +427,7 @@ function RelatedChallengesTable({
               <Th>Challenge</Th>
               <Th>Outcome</Th>
               <Th className="text-right">Evidence</Th>
-              <Th className="text-right">TTPs</Th>
+              <Th className="text-right">Behaviors</Th>
             </tr>
           </thead>
           <tbody>
@@ -522,7 +522,7 @@ function RelatedTechniquesTable({
     <Card className="overflow-hidden py-0">
       <div className="border-b border-border px-3 py-3 text-sm font-medium">{title}</div>
       {techniques.length === 0 ? (
-        <EmptyState title="No techniques" body="No techniques are linked here." />
+        <EmptyState title="No behaviors" body="No behaviors are linked here." />
       ) : (
         <Table>
           <thead>
@@ -572,7 +572,7 @@ function RelatedEvidenceTable({
           <thead>
             <tr className="border-b border-border">
               <Th>ID</Th>
-              <Th className="text-right">Techniques</Th>
+              <Th className="text-right">Behaviors</Th>
               <Th className="text-right">Comments</Th>
               <Th className="text-right">Decisions</Th>
             </tr>
@@ -828,6 +828,10 @@ function ReadinessChecklist({ readiness }: Readonly<{ readiness: Record<string, 
 
 function readinessLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function workspaceTabLabel(value: WorkspaceTab) {
+  return value === "techniques" ? "behaviors" : value;
 }
 
 function formatKeyValueMap(value: Record<string, string>) {

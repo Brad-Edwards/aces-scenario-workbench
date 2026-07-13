@@ -34,7 +34,7 @@ export function ScenarioPage() {
                 <Th>Revision</Th>
                 <Th>Framework</Th>
                 <Th className="text-right">Modules</Th>
-                <Th className="text-right">Techniques</Th>
+                <Th className="text-right">Behaviors</Th>
                 <Th className="text-right">Evidence</Th>
                 <Th className="text-right">Challenges</Th>
                 <Th className="text-right">Comments</Th>
