@@ -96,6 +96,30 @@ export type RevisionWorkspace = {
     forbidden_fields?: string[];
     negative_gates?: Array<{ id: string; description: string }>;
   };
+  topology: {
+    source?: string;
+    name?: string;
+    version?: string;
+    description?: string;
+    nodes?: TopologyNode[];
+    entities?: TopologyEntity[];
+    agents?: TopologyAgent[];
+    behavior_specs?: TopologyBehaviorSpec[];
+    zones?: TopologyZone[];
+    networks?: TopologyNetwork[];
+    links?: Array<{ source: string; target: string; type: string }>;
+    coverage?: {
+      sdl_node_count: number;
+      sdl_service_count: number;
+      sdl_agent_count: number;
+      sdl_entity_count: number;
+      sdl_behavior_spec_count: number;
+      contract_asset_count: number;
+      contract_service_count: number;
+      contract_assets_missing_from_sdl: EnvironmentAsset[];
+      contract_services_missing_from_sdl: EnvironmentService[];
+    };
+  };
   modules: Array<{
     id: string;
     name: string;
@@ -306,6 +330,70 @@ export type EnvironmentAffordance = {
   type: string;
   asset: string;
   description: string;
+};
+
+export type TopologyNode = {
+  id: string;
+  type: string;
+  os: string;
+  os_version: string;
+  resources: Record<string, string>;
+  description: string;
+  services: TopologyService[];
+  zone: string;
+  networks: string[];
+  role: string;
+  visibility: string;
+  implementation_status: string;
+};
+
+export type TopologyService = {
+  id: string;
+  name: string;
+  port: number | null;
+  asset: string;
+  software_component: string;
+  visibility: string;
+  reset_owner: string;
+  description: string;
+};
+
+export type TopologyEntity = {
+  id: string;
+  role: string;
+  description: string;
+};
+
+export type TopologyAgent = {
+  id: string;
+  entity: string;
+  description: string;
+  initial_hosts: string[];
+  initial_services: string[];
+};
+
+export type TopologyBehaviorSpec = {
+  id: string;
+  semantic_version: string;
+  lifecycle_state: string;
+  participant_refs: string[];
+  ai_offensive_behavior_refs: string[];
+};
+
+export type TopologyZone = {
+  name: string;
+  kind: string;
+  networks: string[];
+  description: string;
+};
+
+export type TopologyNetwork = {
+  name: string;
+  zone: string;
+  scope: string;
+  isolation: string;
+  providers: string[];
+  routes: string[];
 };
 
 export type DecisionValue = "accept" | "needs-change" | "resolve" | "reopen";

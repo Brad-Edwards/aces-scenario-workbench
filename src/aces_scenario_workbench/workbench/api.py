@@ -225,6 +225,7 @@ def revision_workspace(request: HttpRequest, revision_pk: int) -> JsonResponse:
             "scoring": _metadata_dict(revision.metadata, "scoring"),
             "environment": _metadata_dict(revision.metadata, "environment"),
             "telemetry": _metadata_dict(revision.metadata, "telemetry"),
+            "topology": _metadata_dict(revision.metadata, "topology"),
             "modules": [
                 _module_row(step, comment_counts, decision_counts) for step in revision.steps.all()
             ],

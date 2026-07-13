@@ -139,6 +139,14 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert payload["summary"]["totalMinutes"] == 45
     assert payload["scoring"]["max_points"] == 250
     assert payload["environment"]["counts"]["assets"] == 1
+    assert payload["topology"]["source"] == "sdl"
+    assert payload["topology"]["coverage"]["sdl_node_count"] == 2
+    assert payload["topology"]["nodes"][0]["id"] == "participant-workstation"
+    assert payload["topology"]["nodes"][1]["services"][0]["id"] == "proof-api"
+    assert payload["topology"]["agents"][0]["initial_hosts"] == [
+        "participant-workstation",
+        "proof-service",
+    ]
     assert recon_challenge["flagId"] == "flag-recon"
     assert recon_challenge["outcome"] == "recon"
     assert recon_challenge["module"] == "1"

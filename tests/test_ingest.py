@@ -102,6 +102,15 @@ def test_import_pack_creates_planned_and_implemented_challenges(scenario):
     assert revision.metadata["scoring"]["max_points"] == 250
     assert revision.metadata["environment"]["counts"]["assets"] == 1
     assert revision.metadata["environment"]["assets"][0]["id"] == "proof-service"
+    assert revision.metadata["topology"]["source"] == "sdl"
+    assert revision.metadata["topology"]["nodes"][0]["id"] == "participant-workstation"
+    assert revision.metadata["topology"]["nodes"][1]["services"][0]["id"] == "proof-api"
+    assert revision.metadata["topology"]["agents"][0]["initial_hosts"] == [
+        "participant-workstation",
+        "proof-service",
+    ]
+    assert revision.metadata["topology"]["coverage"]["sdl_node_count"] == 2
+    assert revision.metadata["topology"]["coverage"]["contract_asset_count"] == 1
 
 
 def test_changed_challenge_contract_creates_new_revision(scenario, tmp_path):

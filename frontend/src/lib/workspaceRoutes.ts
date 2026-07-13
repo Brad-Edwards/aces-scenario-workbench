@@ -1,5 +1,6 @@
 export type WorkspaceTab =
   | "challenges"
+  | "topology"
   | "schedule"
   | "modules"
   | "techniques"

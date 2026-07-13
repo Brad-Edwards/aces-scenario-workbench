@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from aces_sdl import SDLError, SDLMigrationPolicy, parse_sdl_file
 from django.db import transaction
 
 from .models import (
@@ -58,6 +59,30 @@ def _text(entry: dict[str, Any], key: str, default: str = "") -> str:
 def _mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
     value = data.get(key)
     return value if isinstance(value, dict) else {}
+
+
+def _mapping_any(data: dict[str, Any], *keys: str) -> dict[str, Any]:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
+def _text_any(entry: dict[str, Any], *keys: str, default: str = "") -> str:
+    for key in keys:
+        value = entry.get(key)
+        if value is not None:
+            return str(value)
+    return default
+
+
+def _sequence_any(entry: dict[str, Any], *keys: str) -> list[Any]:
+    for key in keys:
+        value = entry.get(key)
+        if isinstance(value, list):
+            return value
+    return []
 
 
 def _entries(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
@@ -104,7 +129,17 @@ def load_pack_contracts(path: Path) -> dict[str, Any]:
 def _load_sdl(pack_dir: Path) -> dict[str, Any]:
     for found in sorted((pack_dir / "sdl").glob("*.sdl.yaml")):
         if found.is_file():
-            return parse_projection(found.read_bytes())
+            try:
+                scenario = parse_sdl_file(found, migration_policy=SDLMigrationPolicy.ACCEPT)
+            except SDLError as exc:
+                fallback = parse_projection(found.read_bytes())
+                fallback["parser_error"] = str(exc)
+                fallback["parser"] = "yaml-fallback"
+                return fallback
+            parsed = scenario.model_dump(mode="json")
+            parsed["parser"] = "aces-sdl"
+            parsed["advisories"] = [str(advisory) for advisory in scenario.advisories]
+            return parsed
     return {}
 
 
@@ -158,9 +193,13 @@ def _import_revision(
     digest: str,
 ) -> tuple[Revision, bool]:
     framework = _mapping(data, "framework")
+    metadata = _revision_metadata(data, contracts)
 
     existing = Revision.objects.filter(scenario=scenario, content_digest=digest).first()
     if existing is not None:
+        if existing.metadata != metadata:
+            existing.metadata = metadata
+            existing.save(update_fields=["metadata", "updated_at"])
         return existing, False
 
     revision = Revision.objects.create(
@@ -171,19 +210,24 @@ def _import_revision(
         source_repo=_text(data, "source_oracle"),
         framework_name=_text(framework, "name"),
         framework_release=_text(framework, "release"),
-        metadata={
-            "experience_contract": _mapping(data, "experience_contract"),
-            "semantic_binding": _mapping(data, "semantic_binding"),
-            "challenge_contracts": _contract_metadata(contracts),
-            "scoring": _scoring_metadata(contracts.get("scoring", {})),
-            "environment": _environment_metadata(contracts),
-            "schedule": _schedule_metadata(data, contracts),
-            "telemetry": _telemetry_metadata(contracts.get("telemetry", {})),
-        },
+        metadata=metadata,
     )
     _load_objects(revision, data)
     _load_challenges(revision, contracts)
     return revision, True
+
+
+def _revision_metadata(data: dict[str, Any], contracts: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "experience_contract": _mapping(data, "experience_contract"),
+        "semantic_binding": _mapping(data, "semantic_binding"),
+        "challenge_contracts": _contract_metadata(contracts),
+        "scoring": _scoring_metadata(contracts.get("scoring", {})),
+        "environment": _environment_metadata(contracts),
+        "schedule": _schedule_metadata(data, contracts),
+        "telemetry": _telemetry_metadata(contracts.get("telemetry", {})),
+        "topology": _sdl_topology_metadata(contracts.get("sdl", {}), contracts.get("topology", {})),
+    }
 
 
 def _contract_metadata(contracts: dict[str, Any]) -> dict[str, Any]:
@@ -266,7 +310,9 @@ def _environment_metadata(contracts: dict[str, Any]) -> dict[str, Any]:
             _planned_asset_row(row) for row in _entries(planned_assets, "asset_sets")
         ],
         "affordances": [_affordance_row(row) for row in _entries(affordances, "affordances")],
-        "sdl_behavior_specs": _sdl_behavior_rows(_mapping(sdl, "behavior-specifications")),
+        "sdl_behavior_specs": _sdl_behavior_rows(
+            _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
+        ),
         "counts": {
             "profiles": _mapping_count(topology.get("profiles")),
             "zones": len(_entries(topology, "zones")),
@@ -302,6 +348,208 @@ def _telemetry_metadata(telemetry: object) -> dict[str, Any]:
         "forbidden_fields": _string_list(telemetry.get("forbidden_fields")),
         "negative_gates": [_generic_id_row(row) for row in _entries(telemetry, "negative_gates")],
     }
+
+
+def _sdl_topology_metadata(sdl: object, topology: object) -> dict[str, Any]:
+    sdl = sdl if isinstance(sdl, dict) else {}
+    topology = topology if isinstance(topology, dict) else {}
+    nodes = _mapping(sdl, "nodes")
+    entities = _mapping(sdl, "entities")
+    agents = _mapping(sdl, "agents")
+    behavior_specs = _mapping_any(sdl, "behavior_specifications", "behavior-specifications")
+    assets = _entries(topology, "assets")
+    services = _entries(topology, "services")
+    assets_by_id = {_text(row, "id"): row for row in assets if _text(row, "id")}
+    services_by_id = {_text(row, "id"): row for row in services if _text(row, "id")}
+
+    return {
+        "source": "sdl",
+        "parser": _text(sdl, "parser"),
+        "advisories": _string_list(sdl.get("advisories")),
+        "parser_error": _text(sdl, "parser_error"),
+        "name": _text(sdl, "name"),
+        "version": _text(sdl, "version"),
+        "description": _text(sdl, "description"),
+        "nodes": [
+            _sdl_node_row(key, value, assets_by_id, services_by_id)
+            for key, value in sorted(nodes.items())
+        ],
+        "entities": [_sdl_entity_row(key, value) for key, value in sorted(entities.items())],
+        "agents": [_sdl_agent_row(key, value) for key, value in sorted(agents.items())],
+        "behavior_specs": [
+            _sdl_behavior_spec_row(key, value) for key, value in sorted(behavior_specs.items())
+        ],
+        "zones": [_zone_row(row) for row in _entries(topology, "zones")],
+        "networks": [_network_row(row) for row in _entries(topology, "networks")],
+        "links": _sdl_topology_links(entities, agents, nodes, behavior_specs),
+        "coverage": {
+            "sdl_node_count": len(nodes),
+            "sdl_service_count": sum(
+                len(_sequence(value, "services"))
+                for value in nodes.values()
+                if isinstance(value, dict)
+            ),
+            "sdl_agent_count": len(agents),
+            "sdl_entity_count": len(entities),
+            "sdl_behavior_spec_count": len(behavior_specs),
+            "contract_asset_count": len(assets),
+            "contract_service_count": len(services),
+            "contract_assets_missing_from_sdl": [
+                _asset_row(row) for row in assets if _text(row, "id") not in nodes
+            ],
+            "contract_services_missing_from_sdl": [
+                _service_row(row)
+                for row in services
+                if _text(row, "id") not in _sdl_service_names(nodes)
+            ],
+        },
+    }
+
+
+def _sdl_node_row(
+    node_id: str,
+    row: object,
+    assets_by_id: dict[str, dict[str, Any]],
+    services_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    asset = assets_by_id.get(node_id, {})
+    services = [_sdl_service_row(service, services_by_id) for service in _sequence(row, "services")]
+    return {
+        "id": node_id,
+        "type": _text(row, "type"),
+        "os": _text(row, "os"),
+        "os_version": _text_any(row, "os_version", "os-version"),
+        "resources": _string_mapping(row.get("resources")),
+        "description": _text(row, "description"),
+        "services": services,
+        "zone": _text(asset, "zone"),
+        "networks": _string_list(asset.get("networks")),
+        "role": _text(asset, "role"),
+        "visibility": _text(asset, "visibility"),
+        "implementation_status": _text(asset, "implementation_status"),
+    }
+
+
+def _sdl_service_row(row: object, services_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    service_id = _text(row, "name") or _text(row, "id")
+    service = services_by_id.get(service_id, {})
+    return {
+        "id": service_id,
+        "name": service_id,
+        "port": _int_or_none(row.get("port")),
+        "asset": _text(service, "asset"),
+        "software_component": _text(service, "software_component"),
+        "visibility": _text(service, "visibility"),
+        "reset_owner": _text(service, "reset_owner"),
+        "description": _text(service, "description"),
+    }
+
+
+def _sdl_entity_row(entity_id: str, row: object) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    return {
+        "id": entity_id,
+        "role": _text(row, "role"),
+        "description": _text(row, "description"),
+    }
+
+
+def _sdl_agent_row(agent_id: str, row: object) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    initial_knowledge = _mapping_any(row, "initial_knowledge", "initial-knowledge")
+    return {
+        "id": agent_id,
+        "entity": _text(row, "entity"),
+        "description": _text(row, "description"),
+        "initial_hosts": _string_list(initial_knowledge.get("hosts")),
+        "initial_services": _string_list(initial_knowledge.get("services")),
+    }
+
+
+def _sdl_behavior_spec_row(spec_id: str, row: object) -> dict[str, Any]:
+    row = row if isinstance(row, dict) else {}
+    return {
+        "id": spec_id,
+        "semantic_version": _text_any(row, "semantic_version", "semantic-version"),
+        "lifecycle_state": _text_any(row, "lifecycle_state", "lifecycle-state"),
+        "participant_refs": _string_list(row.get("participant_refs"))
+        or _string_list(row.get("participant-refs")),
+        "ai_offensive_behavior_refs": _string_list(row.get("ai_offensive_behavior_refs"))
+        or _string_list(row.get("ai-offensive-behavior-refs")),
+    }
+
+
+def _zone_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": _text(row, "name"),
+        "kind": _text(row, "kind"),
+        "networks": _string_list(row.get("networks")),
+        "description": _text(row, "description"),
+    }
+
+
+def _network_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": _text(row, "name"),
+        "zone": _text(row, "zone"),
+        "scope": _text(row, "scope"),
+        "isolation": _text(row, "isolation"),
+        "providers": _string_list(row.get("providers")),
+        "routes": _string_list(row.get("routes")),
+    }
+
+
+def _sdl_topology_links(
+    entities: dict[str, Any],
+    agents: dict[str, Any],
+    nodes: dict[str, Any],
+    behavior_specs: dict[str, Any],
+) -> list[dict[str, str]]:
+    links: list[dict[str, str]] = []
+    for agent_id, agent in sorted(agents.items()):
+        if not isinstance(agent, dict):
+            continue
+        entity_id = _text(agent, "entity")
+        if entity_id in entities:
+            links.append({"source": entity_id, "target": agent_id, "type": "entity-agent"})
+        initial_knowledge = _mapping_any(agent, "initial_knowledge", "initial-knowledge")
+        for host in _string_list(initial_knowledge.get("hosts")):
+            if host in nodes:
+                links.append({"source": agent_id, "target": host, "type": "agent-node"})
+        for service in _string_list(initial_knowledge.get("services")):
+            links.append({"source": agent_id, "target": service, "type": "agent-service"})
+
+    for spec_id, spec in sorted(behavior_specs.items()):
+        if not isinstance(spec, dict):
+            continue
+        participants = _string_list(spec.get("participant_refs")) or _string_list(
+            spec.get("participant-refs")
+        )
+        for participant in participants:
+            if participant in agents:
+                links.append({"source": participant, "target": spec_id, "type": "agent-behavior"})
+    return links
+
+
+def _sdl_service_names(nodes: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        for service in _sequence(node, "services"):
+            if isinstance(service, dict):
+                service_id = _text(service, "name") or _text(service, "id")
+                if service_id:
+                    names.add(service_id)
+    return names
+
+
+def _string_mapping(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): str(item) for key, item in value.items()}
 
 
 def _asset_row(row: dict[str, Any]) -> dict[str, Any]:
