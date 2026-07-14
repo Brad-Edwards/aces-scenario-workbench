@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.utils.text import slugify
 
-from ...ingest import ProjectionError, import_pack
+from ...ingest import ProjectionError, import_pack, load_pack_metadata
 from ...models import Membership, Role, Scenario
 
 
@@ -37,6 +37,7 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         source_path = Path(options["path"])
+        options = self._with_pack_metadata(source_path, options)
         slug = options["slug"] or slugify(source_path.name)
         if not slug:
             raise CommandError("Could not infer a scenario slug; pass --slug.")
@@ -72,6 +73,15 @@ class Command(BaseCommand):
             self.stdout.write("Updated scenario access.")
         elif membership_result == "unchanged":
             self.stdout.write("Scenario access already present.")
+
+    def _with_pack_metadata(self, source_path: Path, options: dict[str, Any]) -> dict[str, Any]:
+        metadata = load_pack_metadata(source_path)
+        resolved = dict(options)
+        if resolved["name"] is None and isinstance(metadata.get("title"), str):
+            resolved["name"] = metadata["title"]
+        if resolved["description"] is None and isinstance(metadata.get("description"), str):
+            resolved["description"] = metadata["description"]
+        return resolved
 
     def _sync_scenario(self, slug: str, options: dict[str, Any]) -> tuple[Scenario, bool]:
         scenario, created = Scenario.objects.get_or_create(
