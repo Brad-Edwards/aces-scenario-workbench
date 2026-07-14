@@ -205,11 +205,13 @@ def load_pack_metadata(path: Path) -> dict[str, Any]:
 
 def _challenge_portfolio_objectives(markdown: str) -> dict[str, str]:
     objectives: dict[str, str] = {}
-    row_pattern = re.compile(r"^\|\s*`(?P<challenge_id>[^`]+)`\s*\|\s*(?P<objective>[^|]+?)\s*\|")
     for line in markdown.splitlines():
-        match = row_pattern.match(line)
-        if match:
-            objectives[match.group("challenge_id")] = match.group("objective").strip()
+        columns = [column.strip() for column in line.split("|")]
+        if len(columns) < 4 or not columns[1].startswith("`") or not columns[1].endswith("`"):
+            continue
+        challenge_id = columns[1][1:-1].strip()
+        if challenge_id and columns[2]:
+            objectives[challenge_id] = columns[2]
     return objectives
 
 
@@ -1465,11 +1467,7 @@ def _create_sdl_challenge(
     points = _int_or_none(extension.get("points"))
     flag_id = _sdl_challenge_flag_id(spec_id, extension)
     participant = context.participant_challenges.get(flag_id, {})
-    objective = (
-        _text(participant, "question")
-        or context.portfolio_objectives.get(spec_id, "")
-        or _text(extension, "proof_obligation")
-    )
+    objective = _sdl_challenge_objective(context, spec_id, extension, participant)
     return Challenge.objects.create(
         revision=revision,
         step=step,
@@ -1485,7 +1483,7 @@ def _create_sdl_challenge(
         runtime_entrypoint="",
         source_path=f"sdl:{spec_id}",
         metadata=_sdl_challenge_metadata(
-            context, spec_id, spec, extension, participant, objective, step, points, evidence_key
+            context, spec_id, spec, extension, participant, step, evidence_key
         ),
     )
 
@@ -1504,11 +1502,11 @@ def _sdl_challenge_metadata(
     spec: dict[str, Any],
     extension: dict[str, Any],
     participant: dict[str, Any],
-    objective: str,
     step: Step | None,
-    points: int | None,
     evidence_key: str,
 ) -> dict[str, Any]:
+    points = _int_or_none(extension.get("points"))
+    objective = _sdl_challenge_objective(context, spec_id, extension, participant)
     return {
         "sdl_behavior_specification": spec_id,
         "canonical_steps": [step.path_step] if step else [],
@@ -1538,6 +1536,19 @@ def _sdl_challenge_metadata(
         "sdl_challenge": _sdl_challenge_detail_metadata(spec_id, spec, extension),
         "related_systems": _sdl_related_systems(spec, context.nodes),
     }
+
+
+def _sdl_challenge_objective(
+    context: SdlChallengeContext,
+    spec_id: str,
+    extension: dict[str, Any],
+    participant: dict[str, Any],
+) -> str:
+    return (
+        _text(participant, "question")
+        or context.portfolio_objectives.get(spec_id, "")
+        or _text(extension, "proof_obligation")
+    )
 
 
 def _sdl_challenge_detail_metadata(
