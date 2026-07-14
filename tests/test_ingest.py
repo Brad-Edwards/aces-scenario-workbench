@@ -143,6 +143,26 @@ def test_import_pack_expands_modular_sdl_when_parser_rejects_root(
 ):
     pack = tmp_path / "modular-sdl-pack"
     (pack / "sdl" / "modules").mkdir(parents=True)
+    (pack / "challenges").mkdir()
+    (pack / "docs").mkdir()
+    (pack / "challenges" / "challenges.yaml").write_text(
+        """
+challenges:
+  - flag_id: flag-agent-proposal
+    title: Participant title
+    category: AI Agent Security
+    question: Cause a prohibited proposal and observe the policy denial.
+    hints:
+      - Compare the proposal with the policy decision.
+""".strip()
+    )
+    (pack / "docs" / "challenge-portfolio.md").write_text(
+        """
+| ID | Participant-visible objective | Tier |
+|---|---|---|
+| `kep-m01-a` | Portfolio objective used when participant copy is absent. | Accessible |
+""".strip()
+    )
     (pack / "sdl" / "scenario.sdl.yaml").write_text(
         """
 name: modular-scenario
@@ -169,9 +189,11 @@ nodes:
     type: vm
     os: linux
     description: Participant workstation.
+    features: [browser-terminal]
     services:
       - name: browser-terminal
         port: 443
+        description: Browser terminal service.
 infrastructure:
   participant-entry:
     count: 1
@@ -179,6 +201,9 @@ infrastructure:
       cidr: 10.10.10.0/24
       gateway: 10.10.10.1
       internal: true
+  participant-workstation:
+    count: 1
+    links: [participant-entry]
 relationships:
   participant-entry-self:
     type: connects_to
@@ -212,6 +237,7 @@ behavior_specifications:
   kep-m01-a:
     lifecycle_state: draft
     participant_refs: [core.participant]
+    authority_scope_refs: [nodes.core.participant-workstation.services.browser-terminal]
     ai_offensive_behavior_refs: [execution, defense-evasion]
     extensions:
       x-keplerops:challenge:
@@ -262,6 +288,23 @@ behavior_specifications:
     assert challenge.step.path_step == "1"
     assert challenge.implemented is True
     assert challenge.points == 50
+    assert challenge.question == "Cause a prohibited proposal and observe the policy denial."
+    assert challenge.hints == ["Compare the proposal with the policy decision."]
+    assert challenge.metadata["participant"]["title"] == "Participant title"
+    assert challenge.metadata["sdl_challenge"]["authority_scope_refs"] == [
+        "nodes.core.participant-workstation.services.browser-terminal"
+    ]
+    assert challenge.metadata["related_systems"] == [
+        {
+            "id": "participant-workstation",
+            "type": "vm",
+            "description": "Participant workstation.",
+            "service": "browser-terminal",
+            "service_port": 443,
+            "service_description": "Browser terminal service.",
+            "reference": "nodes.core.participant-workstation.services.browser-terminal",
+        }
+    ]
     assert challenge.metadata["readiness"] == {
         "sdl_challenge": True,
         "module": True,
@@ -277,8 +320,15 @@ behavior_specifications:
     assert requirement.event_kind == "agent-proposal-denial"
     assert requirement.source_path == "sdl:kep-m01-a"
     assert revision.metadata["topology"]["infrastructure"][0]["cidr"] == "10.10.10.0/24"
+    workstation = next(
+        node
+        for node in revision.metadata["topology"]["nodes"]
+        if node["id"] == "participant-workstation"
+    )
+    assert workstation["networks"] == ["participant-entry"]
+    assert workstation["features"] == ["browser-terminal"]
     assert revision.metadata["topology"]["relationships"][0]["ports"] == "443"
-    assert revision.metadata["topology"]["coverage"]["sdl_infrastructure_count"] == 1
+    assert revision.metadata["topology"]["coverage"]["sdl_infrastructure_count"] == 2
     assert revision.metadata["topology"]["coverage"]["sdl_relationship_count"] == 1
     assert "behavior_specs" not in revision.metadata["topology"]
 
@@ -375,6 +425,25 @@ def test_sync_scenario_command_infers_slug_from_directory():
     call_command("sync_scenario", str(SAMPLE.parent))
     scenario = Scenario.objects.get(slug="sample-scenario")
     assert scenario.revisions.count() == 1
+
+
+@pytest.mark.django_db
+def test_sync_scenario_command_uses_pack_identity(tmp_path):
+    pack = tmp_path / "named-pack"
+    shutil.copytree(SAMPLE.parent, pack)
+    (pack / "pack.yaml").write_text(
+        """
+name: named-pack
+title: Canonical Scenario Name
+description: Canonical scenario description.
+""".strip()
+    )
+
+    call_command("sync_scenario", str(pack), slug="named")
+
+    scenario = Scenario.objects.get(slug="named")
+    assert scenario.name == "Canonical Scenario Name"
+    assert scenario.description == "Canonical scenario description."
 
 
 @pytest.mark.django_db

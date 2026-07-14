@@ -1,8 +1,8 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 
 import { getRevision, type RevisionWorkspace } from "@/api/client";
+import { NetworkDiagram } from "@/components/NetworkDiagram";
 import { Badge, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 import { challengePath, evidencePath, modulePath, objectPath, techniquePath } from "@/lib/workspaceRoutes";
 
@@ -134,6 +134,11 @@ function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
                     {challenge.title}
                   </Link>
                   <div className="mt-1 font-mono text-xs font-normal text-muted-foreground">{challenge.flagId}</div>
+                  {challenge.question ? (
+                    <p className="mt-2 max-w-xl whitespace-normal text-sm font-normal leading-5 text-muted-foreground">
+                      {challenge.question}
+                    </p>
+                  ) : null}
                 </Td>
                 <Td>
                   <Badge className={challenge.implemented ? "" : "bg-muted text-muted-foreground"}>
@@ -176,7 +181,6 @@ function TopologyView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
   const relationships = topology.relationships ?? [];
   const nodes = topology.nodes ?? [];
   const hosts = nodes.filter((node) => node.type !== "switch");
-  const entities = topology.entities ?? [];
   const agents = topology.agents ?? [];
   const networks = topology.networks ?? [];
   const missingAssets = topology.coverage?.contract_assets_missing_from_sdl ?? [];
@@ -195,43 +199,19 @@ function TopologyView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
       <Card className="p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-medium">Network topology</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Network segments, hosts, services, and allowed relationships.</p>
+            <h2 className="text-sm font-medium">Network diagram</h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Subnets, systems, services, actors, and allowed network paths.</p>
           </div>
         </div>
         {networkSegments.length === 0 && nodes.length === 0 && agents.length === 0 ? (
           <EmptyState title="No topology" body="This revision does not include topology data." />
         ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(240px,1fr)_minmax(280px,1.15fr)_minmax(220px,0.9fr)]">
-            <TopologyColumn title="Network segments">
-              {networkSegments.length ? (
-                networkSegments.map((segment) => (
-                  <TopologySegmentCard key={segment.id} segment={segment} relationships={relationships} />
-                ))
-              ) : (
-                <TopologyEmpty label="No network segments" />
-              )}
-            </TopologyColumn>
-            <TopologyColumn title="Hosts and services">
-              {hosts.length ? (
-                hosts.map((node) => <TopologyNodeCard key={node.id} node={node} />)
-              ) : (
-                <TopologyEmpty label="No hosts" />
-              )}
-            </TopologyColumn>
-            <TopologyColumn title="Actors">
-              {entities.length || agents.length ? (
-                <>
-                  {entities.map((entity) => (
-                    <TopologyCard key={entity.id} title={entity.id} subtitle={entity.role} body={entity.description} />
-                  ))}
-                  {agents.map((agent) => <TopologyAgentCard key={agent.id} agent={agent} />)}
-                </>
-              ) : (
-                <TopologyEmpty label="No actors" />
-              )}
-            </TopologyColumn>
-          </div>
+          <NetworkDiagram
+            infrastructure={infrastructure}
+            relationships={relationships}
+            systems={nodes}
+            agents={agents}
+          />
         )}
       </Card>
 
@@ -241,125 +221,6 @@ function TopologyView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
       {missingAssets.length || missingServices.length ? (
         <TopologyGapsTable assets={missingAssets} services={missingServices} />
       ) : null}
-    </div>
-  );
-}
-
-function TopologyColumn({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
-  return (
-    <section className="rounded-lg border border-border bg-background/40 p-3">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function TopologyCard({
-  title,
-  subtitle,
-  body,
-}: Readonly<{ title: string; subtitle?: string; body?: string }>) {
-  return (
-    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
-      <div className="font-mono text-sm font-medium">{title}</div>
-      {subtitle ? <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div> : null}
-      {body ? <p className="mt-2 text-sm leading-5 text-muted-foreground">{body}</p> : null}
-    </div>
-  );
-}
-
-function TopologySegmentCard({
-  segment,
-  relationships,
-}: Readonly<{
-  segment: NonNullable<RevisionWorkspace["topology"]["infrastructure"]>[number];
-  relationships: NonNullable<RevisionWorkspace["topology"]["relationships"]>;
-}>) {
-  const reference = `infrastructure.${segment.id}`;
-  const connected = relationships.filter((relationship) => relationship.source === reference || relationship.target === reference);
-  return (
-    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
-      <div className="font-mono text-sm font-medium">{segment.id}</div>
-      <div className="mt-1 flex flex-wrap gap-2">
-        {segment.cidr ? <Badge>{segment.cidr}</Badge> : null}
-        {segment.gateway ? <Badge>{segment.gateway}</Badge> : null}
-        {segment.internal ? <Badge>internal</Badge> : null}
-      </div>
-      {segment.description ? <p className="mt-2 text-sm leading-5 text-muted-foreground">{segment.description}</p> : null}
-      {connected.length ? (
-        <div className="mt-3 space-y-1">
-          {connected.slice(0, 5).map((relationship) => (
-            <div key={relationship.id} className="rounded border border-border bg-background/50 px-2 py-1 text-xs text-muted-foreground">
-              <span className="font-mono text-foreground">{shortTopologyRef(relationship.target === reference ? relationship.source : relationship.target)}</span>
-              {relationship.ports ? ` / ${relationship.ports}` : ""}
-            </div>
-          ))}
-          {connected.length > 5 ? <div className="text-xs text-muted-foreground">+{connected.length - 5} more</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function TopologyAgentCard({
-  agent,
-}: Readonly<{ agent: NonNullable<RevisionWorkspace["topology"]["agents"]>[number] }>) {
-  return (
-    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
-      <div className="font-mono text-sm font-medium">{agent.id}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{agent.entity}</div>
-      <p className="mt-2 text-sm leading-5 text-muted-foreground">{agent.description || "—"}</p>
-      <KeyValuePills label="Hosts" values={agent.initial_hosts} />
-      <KeyValuePills label="Services" values={agent.initial_services} />
-    </div>
-  );
-}
-
-function TopologyNodeCard({
-  node,
-}: Readonly<{ node: NonNullable<RevisionWorkspace["topology"]["nodes"]>[number] }>) {
-  return (
-    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
-      <div className="font-mono text-sm font-medium">{node.id}</div>
-      <div className="mt-1 flex flex-wrap gap-2">
-        {node.type ? <Badge>{node.type}</Badge> : null}
-        {node.os ? <Badge>{node.os}</Badge> : null}
-        {node.implementation_status ? <Badge>{node.implementation_status}</Badge> : null}
-      </div>
-      <p className="mt-2 text-sm leading-5 text-muted-foreground">{node.description || "—"}</p>
-      <KeyValuePills label="Networks" values={node.networks} />
-      {node.services.length ? (
-        <div className="mt-3 space-y-2">
-          {node.services.map((service) => (
-            <div key={service.id} className="rounded border border-border bg-background/50 p-2">
-              <div className="font-mono text-xs font-medium">{service.id}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {service.port ? `:${service.port}` : "no port"} {service.software_component ? `/ ${service.software_component}` : ""}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function TopologyEmpty({ label }: Readonly<{ label: string }>) {
-  return <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">{label}</div>;
-}
-
-function KeyValuePills({ label, values }: Readonly<{ label: string; values: string[] }>) {
-  if (!values.length) return null;
-  return (
-    <div className="mt-3">
-      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {values.map((value) => (
-          <span key={value} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-            {value}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -409,9 +270,9 @@ function TopologyNodesTable({
 }: Readonly<{ nodes: NonNullable<RevisionWorkspace["topology"]["nodes"]> }>) {
   return (
     <Card className="overflow-hidden py-0">
-      <div className="border-b border-border px-3 py-3 text-sm font-medium">SDL nodes</div>
+      <div className="border-b border-border px-3 py-3 text-sm font-medium">Systems and services</div>
       {nodes.length === 0 ? (
-        <EmptyState title="No SDL nodes" body="No SDL node definitions are available." />
+        <EmptyState title="No systems" body="No systems are defined for this revision." />
       ) : (
         <Table>
           <thead>

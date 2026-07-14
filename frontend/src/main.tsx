@@ -9,6 +9,7 @@ import { RevisionPage } from "@/pages/RevisionPage";
 import { ScenarioPage } from "@/pages/ScenarioPage";
 import { ScenariosPage } from "@/pages/ScenariosPage";
 
+import "@xyflow/react/dist/style.css";
 import "./index.css";
 
 const queryClient = new QueryClient({

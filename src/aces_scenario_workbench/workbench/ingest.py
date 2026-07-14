@@ -49,6 +49,8 @@ CONTRACT_PATHS = {
     "planned_assets": "assets/planned-assets.yaml",
     "affordances": "assets/affordances.yaml",
 }
+PACK_METADATA_PATH = "pack.yaml"
+CHALLENGE_PORTFOLIO_PATH = "docs/challenge-portfolio.md"
 SDL_LOCAL_PREFIX = "local:"
 SDL_PARSER_ISSUE = "https://github.com/Brad-Edwards/aces/issues/767"
 SDL_MAPPING_SECTIONS = (
@@ -103,6 +105,9 @@ class SdlChallengeContext:
     module_steps: dict[str, Step]
     steps_by_path: dict[str, Step]
     techniques_by_step: dict[str, list[Technique]]
+    participant_challenges: dict[str, dict[str, Any]]
+    portfolio_objectives: dict[str, str]
+    nodes: dict[str, Any]
 
 
 def _text(entry: dict[str, Any], key: str, default: str = "") -> str:
@@ -170,6 +175,16 @@ def load_pack_contracts(path: Path) -> dict[str, Any]:
         if found.is_file():
             contracts[key] = parse_projection(found.read_bytes())
 
+    pack_metadata = load_pack_metadata(path)
+    if pack_metadata:
+        contracts["pack"] = pack_metadata
+
+    portfolio_path = path / CHALLENGE_PORTFOLIO_PATH
+    if portfolio_path.is_file():
+        contracts["challenge_portfolio"] = _challenge_portfolio_objectives(
+            portfolio_path.read_text()
+        )
+
     sdl = _load_sdl(path)
     if sdl:
         contracts["sdl"] = sdl
@@ -178,6 +193,26 @@ def load_pack_contracts(path: Path) -> dict[str, Any]:
     if runtime:
         contracts["runtime_challenges"] = runtime
     return contracts
+
+
+def load_pack_metadata(path: Path) -> dict[str, Any]:
+    """Load descriptive pack identity without changing the pack."""
+    pack_path = path / PACK_METADATA_PATH if path.is_dir() else None
+    if pack_path is None or not pack_path.is_file():
+        return {}
+    return parse_projection(pack_path.read_bytes())
+
+
+def _challenge_portfolio_objectives(markdown: str) -> dict[str, str]:
+    objectives: dict[str, str] = {}
+    for line in markdown.splitlines():
+        columns = [column.strip() for column in line.split("|")]
+        if len(columns) < 4 or not columns[1].startswith("`") or not columns[1].endswith("`"):
+            continue
+        challenge_id = columns[1][1:-1].strip()
+        if challenge_id and columns[2]:
+            objectives[challenge_id] = columns[2]
+    return objectives
 
 
 def _load_sdl(pack_dir: Path) -> dict[str, Any]:
@@ -741,7 +776,7 @@ def _sdl_topology_metadata(sdl: object, topology: object) -> dict[str, Any]:
             _sdl_relationship_row(key, value) for key, value in sorted(relationships.items())
         ],
         "nodes": [
-            _sdl_node_row(key, value, assets_by_id, services_by_id)
+            _sdl_node_row(key, value, infrastructure, assets_by_id, services_by_id)
             for key, value in sorted(nodes.items())
         ],
         "entities": [_sdl_entity_row(key, value) for key, value in sorted(entities.items())],
@@ -791,6 +826,7 @@ def _sdl_infrastructure_row(
         "gateway": _text(properties, "gateway"),
         "internal": bool(properties.get("internal")),
         "description": _text(node, "description") or _text(row, "description"),
+        "links": _string_list(row.get("links")),
         "properties": _string_mapping(properties),
     }
 
@@ -812,11 +848,14 @@ def _sdl_relationship_row(relationship_id: str, row: object) -> dict[str, Any]:
 def _sdl_node_row(
     node_id: str,
     row: object,
+    infrastructure: dict[str, Any],
     assets_by_id: dict[str, dict[str, Any]],
     services_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     row = row if isinstance(row, dict) else {}
     asset = assets_by_id.get(node_id, {})
+    infrastructure_row = infrastructure.get(node_id, {})
+    infrastructure_row = infrastructure_row if isinstance(infrastructure_row, dict) else {}
     services = [_sdl_service_row(service, services_by_id) for service in _sequence(row, "services")]
     return {
         "id": node_id,
@@ -825,9 +864,11 @@ def _sdl_node_row(
         "os_version": _text_any(row, "os_version", "os-version"),
         "resources": _string_mapping(row.get("resources")),
         "description": _text(row, "description"),
+        "features": _string_list(row.get("features")),
         "services": services,
         "zone": _text(asset, "zone"),
-        "networks": _string_list(asset.get("networks")),
+        "networks": _string_list(infrastructure_row.get("links"))
+        or _string_list(asset.get("networks")),
         "role": _text(asset, "role"),
         "visibility": _text(asset, "visibility"),
         "implementation_status": _text(asset, "implementation_status"),
@@ -1152,7 +1193,7 @@ def _load_challenges(revision: Revision, contracts: dict[str, Any]) -> None:
         return
     behavior_specs = _contract_behavior_specs(contracts)
     if _sdl_challenge_specs(behavior_specs):
-        _load_sdl_challenges(revision, behavior_specs)
+        _load_sdl_challenges(revision, behavior_specs, contracts)
     else:
         _load_legacy_challenges(revision, _legacy_challenge_context(revision, contracts))
 
@@ -1353,18 +1394,27 @@ def _techniques_for_steps(
     return techniques
 
 
-def _load_sdl_challenges(revision: Revision, behavior_specs: dict[str, Any]) -> None:
-    context = _sdl_challenge_context(revision)
+def _load_sdl_challenges(
+    revision: Revision, behavior_specs: dict[str, Any], contracts: dict[str, Any]
+) -> None:
+    context = _sdl_challenge_context(revision, contracts)
     challenge_specs = _sdl_challenge_specs(behavior_specs)
     for index, (spec_id, spec) in enumerate(sorted(challenge_specs.items())):
         _load_sdl_challenge(revision, context, index, spec_id, spec)
 
 
-def _sdl_challenge_context(revision: Revision) -> SdlChallengeContext:
+def _sdl_challenge_context(revision: Revision, contracts: dict[str, Any]) -> SdlChallengeContext:
+    portfolio = contracts.get("challenge_portfolio", {})
+    sdl = contracts.get("sdl", {})
     return SdlChallengeContext(
         module_steps=_revision_module_steps(revision),
         steps_by_path=_revision_steps_by_path(revision),
         techniques_by_step=_techniques_by_step(revision),
+        participant_challenges=_rows_by_key(
+            contracts.get("challenges", {}), "challenges", "flag_id"
+        ),
+        portfolio_objectives=portfolio if isinstance(portfolio, dict) else {},
+        nodes=_mapping(sdl if isinstance(sdl, dict) else {}, "nodes"),
     )
 
 
@@ -1378,7 +1428,9 @@ def _load_sdl_challenge(
     extension = _sdl_challenge_extension(spec)
     step = _sdl_challenge_step(context, spec_id, extension, index)
     evidence_key = _sdl_challenge_evidence_key(extension)
-    challenge = _create_sdl_challenge(revision, spec_id, extension, step, evidence_key)
+    challenge = _create_sdl_challenge(
+        revision, context, spec_id, spec, extension, step, evidence_key
+    )
     _link_sdl_challenge_techniques(challenge, step, context)
     _load_sdl_challenge_evidence(challenge, revision, spec_id, extension, evidence_key)
 
@@ -1404,28 +1456,35 @@ def _sdl_challenge_evidence_key(extension: dict[str, Any]) -> str:
 
 def _create_sdl_challenge(
     revision: Revision,
+    context: SdlChallengeContext,
     spec_id: str,
+    spec: dict[str, Any],
     extension: dict[str, Any],
     step: Step | None,
     evidence_key: str,
 ) -> Challenge:
     module_id = _text(extension, "module")
     points = _int_or_none(extension.get("points"))
+    flag_id = _sdl_challenge_flag_id(spec_id, extension)
+    participant = context.participant_challenges.get(flag_id, {})
+    objective = _sdl_challenge_objective(context, spec_id, extension, participant)
     return Challenge.objects.create(
         revision=revision,
         step=step,
-        flag_id=_sdl_challenge_flag_id(spec_id, extension),
+        flag_id=flag_id,
         outcome_id=_text(extension, "outcome"),
         title=_text(extension, "title") or spec_id,
-        question=_text(extension, "proof_obligation"),
-        category=module_id,
+        question=objective,
+        category=_text(participant, "category") or module_id,
         difficulty=_text(extension, "difficulty"),
         points=points,
-        hints=[],
+        hints=_string_list(participant.get("hints")),
         implemented=_sdl_challenge_implemented(extension),
         runtime_entrypoint="",
         source_path=f"sdl:{spec_id}",
-        metadata=_sdl_challenge_metadata(spec_id, extension, step, points, evidence_key),
+        metadata=_sdl_challenge_metadata(
+            context, spec_id, spec, extension, participant, step, evidence_key
+        ),
     )
 
 
@@ -1438,18 +1497,28 @@ def _sdl_challenge_implemented(extension: dict[str, Any]) -> bool:
 
 
 def _sdl_challenge_metadata(
+    context: SdlChallengeContext,
     spec_id: str,
+    spec: dict[str, Any],
     extension: dict[str, Any],
+    participant: dict[str, Any],
     step: Step | None,
-    points: int | None,
     evidence_key: str,
 ) -> dict[str, Any]:
+    points = _int_or_none(extension.get("points"))
+    objective = _sdl_challenge_objective(context, spec_id, extension, participant)
     return {
         "sdl_behavior_specification": spec_id,
         "canonical_steps": [step.path_step] if step else [],
         "delivery": {
             "interfaces": _string_list(extension.get("interfaces")),
             "live_fire": bool(extension.get("live_fire")),
+        },
+        "participant": {
+            "title": _text(participant, "title") or _text(extension, "title") or spec_id,
+            "objective": objective,
+            "hints": _string_list(participant.get("hints")),
+            "category": _text(participant, "category"),
         },
         "scoring": {
             "id": _text(extension, "outcome"),
@@ -1464,13 +1533,34 @@ def _sdl_challenge_metadata(
             "evidence": bool(evidence_key),
             "runtime": _sdl_challenge_implemented(extension),
         },
-        "sdl_challenge": _sdl_challenge_detail_metadata(spec_id, extension),
+        "sdl_challenge": _sdl_challenge_detail_metadata(spec_id, spec, extension),
+        "related_systems": _sdl_related_systems(spec, context.nodes),
     }
 
 
-def _sdl_challenge_detail_metadata(spec_id: str, extension: dict[str, Any]) -> dict[str, Any]:
+def _sdl_challenge_objective(
+    context: SdlChallengeContext,
+    spec_id: str,
+    extension: dict[str, Any],
+    participant: dict[str, Any],
+) -> str:
+    return (
+        _text(participant, "question")
+        or context.portfolio_objectives.get(spec_id, "")
+        or _text(extension, "proof_obligation")
+    )
+
+
+def _sdl_challenge_detail_metadata(
+    spec_id: str, spec: dict[str, Any], extension: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "challenge_id": _text(extension, "challenge_id") or spec_id,
+        "semantic_version": _text_any(spec, "semantic_version", "semantic-version"),
+        "lifecycle_state": _text_any(spec, "lifecycle_state", "lifecycle-state"),
+        "participant_refs": _string_list(spec.get("participant_refs")),
+        "authority_scope_refs": _string_list(spec.get("authority_scope_refs")),
+        "behavior_refs": _string_list(spec.get("ai_offensive_behavior_refs")),
         "disposition": _text(extension, "disposition"),
         "prerequisites": _string_list(extension.get("prerequisites")),
         "hint_costs": [
@@ -1485,6 +1575,52 @@ def _sdl_challenge_detail_metadata(spec_id: str, extension: dict[str, Any]) -> d
         "implementation_status": _text(extension, "implementation_status"),
         "issue": _int_or_none(extension.get("issue")),
     }
+
+
+def _sdl_related_systems(spec: dict[str, Any], nodes: dict[str, Any]) -> list[dict[str, Any]]:
+    systems: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for reference in _string_list(spec.get("authority_scope_refs")):
+        node_id, service_id = _sdl_node_service_ref(reference)
+        if not node_id or node_id not in nodes or (node_id, service_id) in seen:
+            continue
+        seen.add((node_id, service_id))
+        node = nodes[node_id] if isinstance(nodes[node_id], dict) else {}
+        service = _sdl_service_by_name(node, service_id)
+        systems.append(
+            {
+                "id": node_id,
+                "type": _text(node, "type"),
+                "description": _text(node, "description"),
+                "service": service_id,
+                "service_port": _int_or_none(service.get("port")),
+                "service_description": _text(service, "description"),
+                "reference": reference,
+            }
+        )
+    return systems
+
+
+def _sdl_node_service_ref(reference: str) -> tuple[str, str]:
+    parts = reference.split(".")
+    if not parts or parts[0] != "nodes":
+        return "", ""
+    node_index = 2 if len(parts) > 2 and parts[1] == "core" else 1
+    node_id = parts[node_index] if len(parts) > node_index else ""
+    service_id = ""
+    if "services" in parts:
+        service_index = parts.index("services") + 1
+        service_id = parts[service_index] if len(parts) > service_index else ""
+    return node_id, service_id
+
+
+def _sdl_service_by_name(node: dict[str, Any], service_id: str) -> dict[str, Any]:
+    for service in _sequence(node, "services"):
+        if not isinstance(service, dict):
+            continue
+        if (_text(service, "name") or _text(service, "id")) == service_id:
+            return service
+    return {}
 
 
 def _link_sdl_challenge_techniques(
