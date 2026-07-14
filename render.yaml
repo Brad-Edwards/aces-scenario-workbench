@@ -34,4 +34,4 @@ databases:
     databaseName: aces_workbench
     user: aces_workbench
     region: virginia
-    plan: basic_256mb
+    plan: basic-256mb
