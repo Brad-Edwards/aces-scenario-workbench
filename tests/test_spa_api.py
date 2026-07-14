@@ -33,6 +33,28 @@ def spa_workspace(db):
     Membership.objects.create(scenario=scenario, user=member, role=Role.REVIEWER)
     Membership.objects.create(scenario=other, user=outsider, role=Role.REVIEWER)
     revision, _ = import_pack(scenario, SAMPLE)
+    challenge = revision.challenges.get(flag_id="flag-recon")
+    challenge.metadata = {
+        **challenge.metadata,
+        "participant": {"objective": "Review the exposed reconnaissance surface."},
+        "sdl_challenge": {
+            "proof_obligation": "recon-receipt",
+            "target_minutes": 12,
+            "authority_scope_refs": ["nodes.core.participant-workstation"],
+        },
+        "related_systems": [
+            {
+                "id": "participant-workstation",
+                "type": "vm",
+                "description": "Participant workstation.",
+                "service": "browser-terminal",
+                "service_port": 443,
+                "service_description": "Browser terminal.",
+                "reference": "nodes.core.participant-workstation.services.browser-terminal",
+            }
+        ],
+    }
+    challenge.save(update_fields=["metadata"])
     Comment.objects.create(
         revision=revision,
         object_type=ObjectType.STEP,
@@ -156,6 +178,11 @@ def test_revision_workspace_returns_collaboration_counts(client, spa_workspace):
     assert recon_challenge["readiness"]["runtime"] is True
     assert recon_challenge["scoring"]["points"] == 100
     assert recon_challenge["techniqueIds"] == ["SDL.1.reconnaissance"]
+    assert recon_challenge["participant"]["objective"] == (
+        "Review the exposed reconnaissance surface."
+    )
+    assert recon_challenge["organizer"]["proof_obligation"] == "recon-receipt"
+    assert recon_challenge["relatedSystems"][0]["service"] == "browser-terminal"
     assert recon_challenge["evidenceRequirements"][0]["evidenceId"] == "ev-recon"
     assert recon_challenge["evidenceRequirements"][0]["eventKind"] == "recon_verdict"
     assert recon_challenge["evidenceRequirements"][0]["proofFields"] == [

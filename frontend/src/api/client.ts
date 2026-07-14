@@ -198,6 +198,40 @@ export type RevisionWorkspace = {
       points: number | null;
     }>;
     delivery: Record<string, string>;
+    participant: {
+      title?: string;
+      objective?: string;
+      hints?: string[];
+      category?: string;
+    };
+    organizer: {
+      challenge_id?: string;
+      semantic_version?: string;
+      lifecycle_state?: string;
+      participant_refs?: string[];
+      authority_scope_refs?: string[];
+      behavior_refs?: string[];
+      disposition?: string;
+      prerequisites?: string[];
+      hint_costs?: number[];
+      target_minutes?: number | null;
+      min_minutes?: number | null;
+      max_minutes?: number | null;
+      telemetry_profile?: string;
+      proof_obligation?: string;
+      reliability?: string;
+      implementation_status?: string;
+      issue?: number | null;
+    };
+    relatedSystems: Array<{
+      id: string;
+      type: string;
+      description: string;
+      service: string;
+      service_port: number | null;
+      service_description: string;
+      reference: string;
+    }>;
     evidenceRequirements: Array<{
       evidenceId: string;
       predicate: string;
@@ -342,6 +376,7 @@ export type TopologyInfrastructure = {
   gateway: string;
   internal: boolean;
   description: string;
+  links: string[];
   properties: Record<string, string>;
 };
 
@@ -362,6 +397,7 @@ export type TopologyNode = {
   os_version: string;
   resources: Record<string, string>;
   description: string;
+  features: string[];
   services: TopologyService[];
   zone: string;
   networks: string[];

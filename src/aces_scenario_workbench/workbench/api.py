@@ -514,6 +514,9 @@ def _challenge_row(
         "alternateAwards": _list_of_dicts(metadata.get("alternate_awards")),
         "bundles": _list_of_dicts(metadata.get("bundles")),
         "delivery": _object_dict(metadata.get("delivery")),
+        "participant": _object_dict(metadata.get("participant")),
+        "organizer": _object_dict(metadata.get("sdl_challenge")),
+        "relatedSystems": _list_of_dicts(metadata.get("related_systems")),
         "evidenceRequirements": [
             {
                 "evidenceId": requirement.evidence_key,

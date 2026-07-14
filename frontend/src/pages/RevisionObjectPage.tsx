@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AppWindow, Server } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -247,13 +248,14 @@ function ChallengeDetail({
       <ObjectHeader
         revision={revision}
         title={challenge.title}
-        description={challenge.flagId}
+        description={challenge.question || challenge.flagId}
         backTab="challenges"
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <div className="space-y-6">
           <Card className="p-6">
+            <h2 className="mb-5 text-sm font-medium">Challenge overview</h2>
             <DetailGrid>
               <DetailItem label="Flag ID" value={challenge.flagId} mono />
               <DetailItem label="Outcome" value={challenge.outcome} mono />
@@ -279,10 +281,10 @@ function ChallengeDetail({
                 <DetailItem label="Entrypoint" value={challenge.runtimeEntrypoint} mono />
               ) : null}
             </DetailGrid>
-            <LongText label="Proof obligation" value={challenge.question} />
+            <LongText label="Participant objective" value={challenge.question} />
             <LongText label="Delivery" value={formatKeyValueMap(challenge.delivery)} />
             <section className="mb-5 last:mb-0">
-              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Hints</h2>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Participant hints</h3>
               {challenge.hints.length ? (
                 <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                   {challenge.hints.map((hint) => (
@@ -295,6 +297,8 @@ function ChallengeDetail({
             </section>
           </Card>
 
+          <OrganizerChallengeCard challenge={challenge} />
+          <RelatedSystemsCard challenge={challenge} />
           <EvidenceRequirementsTable revision={revision} challenge={challenge} />
           <RelatedTechniquesTable
             revision={revision}
@@ -312,6 +316,98 @@ function ChallengeDetail({
         />
       </div>
     </>
+  );
+}
+
+function OrganizerChallengeCard({ challenge }: Readonly<{ challenge: ChallengeRow }>) {
+  const organizer = challenge.organizer;
+  const targetWindow = formatMinuteWindow(
+    organizer.min_minutes,
+    organizer.target_minutes,
+    organizer.max_minutes,
+  );
+  return (
+    <Card className="p-6">
+      <h2 className="mb-5 text-sm font-medium">Organizer review</h2>
+      <DetailGrid>
+        <DetailItem label="Challenge ID" value={organizer.challenge_id || challenge.id} mono />
+        <DetailItem label="Lifecycle" value={organizer.lifecycle_state || "—"} />
+        <DetailItem label="Implementation" value={organizer.implementation_status || challenge.status} />
+        <DetailItem label="Time window" value={targetWindow || "—"} />
+        <DetailItem label="Reliability" value={organizer.reliability || "—"} />
+        <DetailItem label="Telemetry" value={organizer.telemetry_profile || "—"} mono />
+        <DetailItem label="Disposition" value={organizer.disposition || "—"} />
+        <DetailItem label="Specification" value={organizer.semantic_version || "—"} mono />
+        <DetailItem label="Implementation issue" value={organizer.issue ? `#${organizer.issue}` : "—"} />
+      </DetailGrid>
+      <LongText label="Proof obligation" value={organizer.proof_obligation} />
+      <ReviewList label="Prerequisites" values={organizer.prerequisites ?? []} mono />
+      <ReviewList label="Behavior categories" values={organizer.behavior_refs ?? []} />
+      <ReviewList label="Authority scope" values={organizer.authority_scope_refs ?? []} mono />
+      <ReviewList
+        label="Hint costs"
+        values={(organizer.hint_costs ?? []).map((cost) => `${cost} points`)}
+      />
+    </Card>
+  );
+}
+
+function RelatedSystemsCard({ challenge }: Readonly<{ challenge: ChallengeRow }>) {
+  return (
+    <Card className="p-6">
+      <h2 className="text-sm font-medium">Related systems and applications</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Systems directly referenced by the challenge scope.</p>
+      {challenge.relatedSystems.length ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {challenge.relatedSystems.map((system) => (
+            <div key={`${system.id}:${system.service}`} className="rounded-lg border border-border bg-background/40 p-4">
+              <div className="flex items-start gap-3">
+                <span className="rounded-md bg-muted p-2 text-muted-foreground"><Server size={17} /></span>
+                <div className="min-w-0">
+                  <div className="font-mono text-sm font-medium">{system.id}</div>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">{system.description || "—"}</p>
+                </div>
+              </div>
+              {system.service ? (
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-card p-2.5">
+                  <AppWindow className="mt-0.5 shrink-0 text-muted-foreground" size={15} />
+                  <div className="min-w-0">
+                    <div className="font-mono text-xs font-medium">
+                      {system.service}{system.service_port ? `:${system.service_port}` : ""}
+                    </div>
+                    {system.service_description ? (
+                      <p className="mt-1 text-xs leading-4 text-muted-foreground">{system.service_description}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-muted-foreground">No system references are attached.</p>
+      )}
+    </Card>
+  );
+}
+
+function ReviewList({
+  label,
+  values,
+  mono = false,
+}: Readonly<{ label: string; values: string[]; mono?: boolean }>) {
+  if (!values.length) return null;
+  return (
+    <section className="mb-5 last:mb-0">
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</h3>
+      <div className="flex flex-wrap gap-2">
+        {values.map((value) => (
+          <span key={value} className={`rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground ${mono ? "font-mono" : ""}`}>
+            {value}
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -795,6 +891,16 @@ function formatValue(value: unknown) {
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "yes" : "no";
   return String(value);
+}
+
+function formatMinuteWindow(
+  minimum?: number | null,
+  target?: number | null,
+  maximum?: number | null,
+) {
+  if (minimum == null && target == null && maximum == null) return "";
+  const range = minimum != null && maximum != null ? `${minimum}–${maximum} min` : "";
+  return target != null ? `${target} min target${range ? ` (${range})` : ""}` : range;
 }
 
 function decodeParam(value: string) {
