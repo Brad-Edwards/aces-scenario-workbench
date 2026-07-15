@@ -51,6 +51,42 @@ def test_account_page_shows_email(client, user_with_data):
     response = client.get(reverse("account"))
     assert response.status_code == 200
     assert b"member@example.com" in response.content
+    assert b"Change password" in response.content
+
+
+def test_account_password_change_updates_password_and_keeps_session(client, user_with_data):
+    client.force_login(user_with_data)
+    response = client.post(
+        reverse("account"),
+        {
+            "old_password": "review-pass-1",
+            "new_password1": "new-review-pass-2",
+            "new_password2": "new-review-pass-2",
+        },
+    )
+    assert response.status_code == 302
+    assert response.url == reverse("account")
+
+    user_with_data.refresh_from_db()
+    assert user_with_data.check_password("new-review-pass-2")
+    assert client.get(reverse("account")).status_code == 200
+
+
+def test_account_password_change_rejects_wrong_current_password(client, user_with_data):
+    client.force_login(user_with_data)
+    response = client.post(
+        reverse("account"),
+        {
+            "old_password": "wrong-password",
+            "new_password1": "new-review-pass-2",
+            "new_password2": "new-review-pass-2",
+        },
+    )
+    assert response.status_code == 200
+    assert b"Your old password was entered incorrectly" in response.content
+
+    user_with_data.refresh_from_db()
+    assert user_with_data.check_password("review-pass-1")
 
 
 def test_account_export(client, user_with_data):

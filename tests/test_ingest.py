@@ -12,6 +12,7 @@ from django.urls import reverse
 
 from aces_scenario_workbench.workbench.ingest import (
     ProjectionError,
+    _sdl_challenge_implemented,
     import_pack,
     import_projection,
     load_projection,
@@ -31,6 +32,21 @@ def scenario(db):
 def _sample_data():
     data, _ = load_projection(SAMPLE)
     return data
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("source-implemented", True),
+        ("automated-proven", True),
+        ("participant-proven", True),
+        ("planned", False),
+        ("", False),
+        ("draft", False),
+    ],
+)
+def test_sdl_challenge_implemented_statuses(status, expected):
+    assert _sdl_challenge_implemented({"implementation_status": status}) is expected
 
 
 def test_import_creates_revision_graph(scenario):

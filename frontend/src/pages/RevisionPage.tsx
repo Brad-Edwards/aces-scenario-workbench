@@ -4,31 +4,21 @@ import { useQuery } from "@tanstack/react-query";
 import { getRevision, type RevisionWorkspace } from "@/api/client";
 import { NetworkDiagram } from "@/components/NetworkDiagram";
 import { Badge, Card, ClickableRow, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
-import { challengePath, evidencePath, modulePath, objectPath, techniquePath } from "@/lib/workspaceRoutes";
+import { challengePath, evidencePath, modulePath, techniquePath } from "@/lib/workspaceRoutes";
 
 type TabKey =
   | "challenges"
   | "topology"
-  | "schedule"
   | "modules"
   | "techniques"
-  | "evidence"
-  | "scoring"
-  | "environment"
-  | "comments"
-  | "decisions";
+  | "environment";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "challenges", label: "Challenges" },
   { key: "topology", label: "Topology" },
-  { key: "schedule", label: "Schedule" },
   { key: "modules", label: "Modules" },
   { key: "techniques", label: "Behaviors" },
-  { key: "evidence", label: "Evidence" },
-  { key: "scoring", label: "Scoring" },
   { key: "environment", label: "Environment" },
-  { key: "comments", label: "Comments" },
-  { key: "decisions", label: "Decisions" },
 ];
 
 export function RevisionPage() {
@@ -81,14 +71,9 @@ export function RevisionPage() {
 
       {active === "challenges" ? <ChallengesTable revision={revision} /> : null}
       {active === "topology" ? <TopologyView revision={revision} /> : null}
-      {active === "schedule" ? <ScheduleTable revision={revision} /> : null}
       {active === "modules" ? <ModulesTable revision={revision} /> : null}
       {active === "techniques" ? <BehaviorsTable revision={revision} /> : null}
-      {active === "evidence" ? <EvidenceTable revision={revision} /> : null}
-      {active === "scoring" ? <ScoringView revision={revision} /> : null}
       {active === "environment" ? <EnvironmentView revision={revision} /> : null}
-      {active === "comments" ? <CommentsTable revision={revision} /> : null}
-      {active === "decisions" ? <DecisionsTable revision={revision} /> : null}
     </>
   );
 }
@@ -115,7 +100,6 @@ function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
               <Th>Module</Th>
               <Th>Difficulty</Th>
               <Th>Evidence</Th>
-              <Th className="text-right">Readiness</Th>
               <Th className="text-right">Behaviors</Th>
               <Th className="text-right">Points</Th>
               <Th className="text-right">Comments</Th>
@@ -160,7 +144,6 @@ function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
                     ? challenge.evidenceRequirements.map((item) => item.evidenceId).join(", ")
                     : "—"}
                 </Td>
-                <Td className="text-right font-mono tabular-nums">{readinessScore(challenge.readiness)}</Td>
                 <Td className="text-right font-mono tabular-nums">{challenge.techniqueIds.length}</Td>
                 <Td className="text-right font-mono tabular-nums">{challenge.points ?? "—"}</Td>
                 <Td className="text-right font-mono tabular-nums">{challenge.commentCount}</Td>
@@ -177,288 +160,21 @@ function ChallengesTable({ revision }: Readonly<{ revision: RevisionWorkspace }>
 function TopologyView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
   const topology = revision.topology;
   const infrastructure = topology.infrastructure ?? [];
-  const networkSegments = infrastructure.filter((segment) => segment.cidr || segment.type === "switch");
   const relationships = topology.relationships ?? [];
   const nodes = topology.nodes ?? [];
-  const hosts = nodes.filter((node) => node.type !== "switch");
-  const agents = topology.agents ?? [];
-  const networks = topology.networks ?? [];
-  const missingAssets = topology.coverage?.contract_assets_missing_from_sdl ?? [];
-  const missingServices = topology.coverage?.contract_services_missing_from_sdl ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label="Network segments" value={networkSegments.length} />
-        <SummaryCard label="Hosts" value={hosts.length} />
-        <SummaryCard label="Services" value={nodes.reduce((count, node) => count + node.services.length, 0)} />
-        <SummaryCard label="Relationships" value={relationships.length} />
-        <SummaryCard label="Agents" value={agents.length} />
-      </div>
-
-      <Card className="p-6">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-medium">Network diagram</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Subnets, systems, services, actors, and allowed network paths.</p>
-          </div>
-        </div>
-        {networkSegments.length === 0 && nodes.length === 0 && agents.length === 0 ? (
-          <EmptyState title="No topology" body="This revision does not include topology data." />
+    <Card className="p-6">
+      <h2 className="mb-5 text-sm font-medium">Network diagram</h2>
+      {infrastructure.length === 0 && nodes.length === 0 ? (
+          <EmptyState title="No topology" body="This revision does not include network topology data." />
         ) : (
           <NetworkDiagram
             infrastructure={infrastructure}
             relationships={relationships}
             systems={nodes}
-            agents={agents}
           />
         )}
-      </Card>
-
-      <TopologyRelationshipsTable relationships={relationships} />
-      <TopologyNodesTable nodes={nodes} />
-      {networks.length ? <TopologyNetworksTable networks={networks} /> : null}
-      {missingAssets.length || missingServices.length ? (
-        <TopologyGapsTable assets={missingAssets} services={missingServices} />
-      ) : null}
-    </div>
-  );
-}
-
-function TopologyRelationshipsTable({
-  relationships,
-}: Readonly<{ relationships: NonNullable<RevisionWorkspace["topology"]["relationships"]> }>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      <div className="border-b border-border px-3 py-3 text-sm font-medium">Network relationships</div>
-      {relationships.length === 0 ? (
-        <EmptyState title="No relationships" body="No explicit topology relationships are available." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Relationship</Th>
-              <Th>Source</Th>
-              <Th>Target</Th>
-              <Th>Category</Th>
-              <Th>Ports</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {relationships.map((relationship) => (
-              <tr key={relationship.id}>
-                <Td className="font-mono font-medium">{relationship.id}</Td>
-                <Td className="font-mono text-muted-foreground">{shortTopologyRef(relationship.source)}</Td>
-                <Td className="font-mono text-muted-foreground">{shortTopologyRef(relationship.target)}</Td>
-                <Td>{relationship.category ? <Badge>{relationship.category}</Badge> : "—"}</Td>
-                <Td className="font-mono text-muted-foreground">{relationship.ports || "—"}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
-function shortTopologyRef(value: string) {
-  return value.replace(/^infrastructure\./, "");
-}
-
-function TopologyNodesTable({
-  nodes,
-}: Readonly<{ nodes: NonNullable<RevisionWorkspace["topology"]["nodes"]> }>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      <div className="border-b border-border px-3 py-3 text-sm font-medium">Systems and services</div>
-      {nodes.length === 0 ? (
-        <EmptyState title="No systems" body="No systems are defined for this revision." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Node</Th>
-              <Th>Type</Th>
-              <Th>OS</Th>
-              <Th>Services</Th>
-              <Th>Networks</Th>
-              <Th>Description</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {nodes.map((node) => (
-              <tr key={node.id}>
-                <Td className="font-mono font-medium">{node.id}</Td>
-                <Td>{node.type || "—"}</Td>
-                <Td className="text-muted-foreground">
-                  {[node.os, node.os_version].filter(Boolean).join(" / ") || "—"}
-                </Td>
-                <Td className="font-mono text-muted-foreground">
-                  {node.services.length
-                    ? node.services
-                        .map((service) => `${service.id}${service.port ? `:${service.port}` : ""}`)
-                        .join(", ")
-                    : "—"}
-                </Td>
-                <Td className="font-mono text-muted-foreground">
-                  {node.networks.length ? node.networks.join(", ") : "—"}
-                </Td>
-                <Td className="min-w-[320px] whitespace-normal text-muted-foreground">{node.description || "—"}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
-function TopologyNetworksTable({
-  networks,
-}: Readonly<{ networks: NonNullable<RevisionWorkspace["topology"]["networks"]> }>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      <div className="border-b border-border px-3 py-3 text-sm font-medium">Network enrichment</div>
-      {networks.length === 0 ? (
-        <EmptyState title="No networks" body="No supporting network contract is available." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Network</Th>
-              <Th>Zone</Th>
-              <Th>Scope</Th>
-              <Th>Isolation</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {networks.map((network) => (
-              <tr key={network.name}>
-                <Td className="font-mono font-medium">{network.name}</Td>
-                <Td className="text-muted-foreground">{network.zone || "—"}</Td>
-                <Td className="text-muted-foreground">{network.scope || "—"}</Td>
-                <Td className="text-muted-foreground">{network.isolation || "—"}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
-function TopologyGapsTable({
-  assets,
-  services,
-}: Readonly<{
-  assets: NonNullable<RevisionWorkspace["topology"]["coverage"]>["contract_assets_missing_from_sdl"];
-  services: NonNullable<RevisionWorkspace["topology"]["coverage"]>["contract_services_missing_from_sdl"];
-}>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      <div className="border-b border-border px-3 py-3 text-sm font-medium">Contract objects not represented in SDL</div>
-      {assets.length === 0 && services.length === 0 ? (
-        <EmptyState title="No topology gaps" body="All supporting contract assets and services are represented in SDL." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Type</Th>
-              <Th>ID</Th>
-              <Th>Detail</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {assets.map((asset) => (
-              <tr key={`asset-${asset.id}`}>
-                <Td>Asset</Td>
-                <Td className="font-mono font-medium">{asset.id}</Td>
-                <Td className="text-muted-foreground">{asset.role || asset.description || "—"}</Td>
-              </tr>
-            ))}
-            {services.map((service) => (
-              <tr key={`service-${service.id}`}>
-                <Td>Service</Td>
-                <Td className="font-mono font-medium">{service.id}</Td>
-                <Td className="text-muted-foreground">{service.asset || service.description || "—"}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
-function ScheduleTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
-  const challengesByModule = new Map<string, RevisionWorkspace["challenges"]>();
-  for (const challenge of revision.challenges) {
-    for (const stepId of challenge.canonicalSteps.length ? challenge.canonicalSteps : [challenge.module]) {
-      if (!stepId) continue;
-      const current = challengesByModule.get(stepId) ?? [];
-      current.push(challenge);
-      challengesByModule.set(stepId, current);
-    }
-  }
-
-  return (
-    <Card className="overflow-hidden py-0">
-      {revision.modules.length === 0 ? (
-        <EmptyState title="No schedule" body="No module timing data is available for this revision." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Module</Th>
-              <Th>Surface</Th>
-              <Th>Outcome</Th>
-              <Th>Challenges</Th>
-              <Th className="text-right">Minutes</Th>
-              <Th className="text-right">Evidence</Th>
-              <Th className="text-right">Behaviors</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {revision.modules.map((module) => {
-              const challenges = challengesByModule.get(module.id) ?? [];
-              return (
-                <ClickableRow
-                  key={module.id}
-                  to={modulePath(revision.id, module.id)}
-                  aria-label={`Open module ${module.id}`}
-                >
-                  <Td className="font-medium">
-                    <Link to={modulePath(revision.id, module.id)} className="hover:underline">
-                      {module.name || `Module ${module.id}`}
-                    </Link>
-                    <div className="mt-1 font-mono text-xs font-normal text-muted-foreground">Step {module.id}</div>
-                  </Td>
-                  <Td className="text-muted-foreground">{module.behaviorSpecification || "—"}</Td>
-                  <Td className="font-mono text-muted-foreground">{module.flagOutcome || "—"}</Td>
-                  <Td>
-                    {challenges.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {challenges.map((challenge) => (
-                          <Link key={challenge.id} to={challengePath(revision.id, challenge.id)}>
-                            <Badge className={challenge.implemented ? "" : "bg-muted text-muted-foreground"}>
-                              {challenge.status}: {challenge.flagId}
-                            </Badge>
-                          </Link>
-                        ))}
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </Td>
-                  <Td className="text-right font-mono tabular-nums">{module.minutes ?? "—"}</Td>
-                  <Td className="text-right font-mono tabular-nums">{module.evidenceCount}</Td>
-                  <Td className="text-right font-mono tabular-nums">{module.techniqueCount}</Td>
-                </ClickableRow>
-              );
-            })}
-          </tbody>
-        </Table>
-      )}
     </Card>
   );
 }
@@ -567,168 +283,6 @@ function BehaviorsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>)
           ))}
         </tbody>
       </Table>
-    </Card>
-  );
-}
-
-function EvidenceTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      <Table>
-        <thead>
-          <tr className="border-b border-border">
-            <Th>ID</Th>
-            <Th>Description</Th>
-            <Th className="text-right">Behaviors</Th>
-            <Th className="text-right">Comments</Th>
-            <Th className="text-right">Decisions</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {revision.evidence.map((item) => (
-            <ClickableRow
-              key={item.id}
-              to={evidencePath(revision.id, item.id)}
-              aria-label={`Open evidence ${item.id}`}
-            >
-              <Td className="font-mono font-medium">
-                <Link to={evidencePath(revision.id, item.id)} className="hover:underline">
-                  {item.id}
-                </Link>
-              </Td>
-              <Td className="min-w-[420px] whitespace-normal text-muted-foreground">{item.description || "—"}</Td>
-              <Td className="text-right font-mono tabular-nums">{item.techniqueCount}</Td>
-              <Td className="text-right font-mono tabular-nums">{item.commentCount}</Td>
-              <Td className="text-right font-mono tabular-nums">{item.decisionCount}</Td>
-            </ClickableRow>
-          ))}
-        </tbody>
-      </Table>
-    </Card>
-  );
-}
-
-function ScoringView({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
-  const awards = revision.scoring.awards ?? [];
-  const alternates = revision.scoring.alternate_awards ?? [];
-  const bundles = revision.scoring.bundles ?? [];
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard label="Mode" value={revision.scoring.mode || "—"} />
-        <SummaryCard label="Max points" value={revision.scoring.max_points ?? "—"} />
-        <SummaryCard label="Bundles" value={bundles.length} />
-      </div>
-      <Card className="overflow-hidden py-0">
-        {awards.length === 0 ? (
-          <EmptyState title="No scoring awards" body="No structured scoring awards are available for this revision." />
-        ) : (
-          <Table>
-            <thead>
-              <tr className="border-b border-border">
-                <Th>Outcome</Th>
-                <Th>Evidence</Th>
-                <Th>Description</Th>
-                <Th className="text-right">Points</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {awards.map((award) => (
-                <tr key={award.id}>
-                  <Td className="font-mono font-medium">{award.id}</Td>
-                  <Td className="font-mono text-muted-foreground">
-                    {award.evidence.length ? award.evidence.join(", ") : "—"}
-                  </Td>
-                  <Td className="min-w-[360px] whitespace-normal text-muted-foreground">
-                    {award.description || "—"}
-                  </Td>
-                  <Td className="text-right font-mono tabular-nums">{award.points ?? "—"}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ScoringList title="Alternate awards" rows={alternates} empty="No alternate awards are defined." />
-        <Card className="overflow-hidden py-0">
-          <div className="border-b border-border px-3 py-3 text-sm font-medium">Bundles</div>
-          {bundles.length === 0 ? (
-            <EmptyState title="No bundles" body="No scoring bundles are defined." />
-          ) : (
-            <Table>
-              <thead>
-                <tr className="border-b border-border">
-                  <Th>Bundle</Th>
-                  <Th>Outcomes</Th>
-                  <Th className="text-right">Points</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {bundles.map((bundle) => (
-                  <tr key={bundle.id}>
-                    <Td className="font-medium">
-                      {bundle.title || bundle.id}
-                      <div className="mt-1 font-mono text-xs font-normal text-muted-foreground">{bundle.id}</div>
-                    </Td>
-                    <Td className="whitespace-normal text-muted-foreground">
-                      {bundle.outcomes.length ? bundle.outcomes.join(", ") : "—"}
-                    </Td>
-                    <Td className="text-right font-mono tabular-nums">{bundle.points ?? "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function ScoringList({
-  title,
-  rows,
-  empty,
-}: Readonly<{
-  title: string;
-  rows: Array<{
-    id: string;
-    points: number | null;
-    evidence: string[];
-    required_outcomes: string[];
-    description: string;
-  }>;
-  empty: string;
-}>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      <div className="border-b border-border px-3 py-3 text-sm font-medium">{title}</div>
-      {rows.length === 0 ? (
-        <EmptyState title={title} body={empty} />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>ID</Th>
-              <Th>Evidence</Th>
-              <Th className="text-right">Points</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <Td className="font-mono font-medium">{row.id}</Td>
-                <Td className="font-mono text-muted-foreground">
-                  {row.evidence.length ? row.evidence.join(", ") : "—"}
-                </Td>
-                <Td className="text-right font-mono tabular-nums">{row.points ?? "—"}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
     </Card>
   );
 }
@@ -944,99 +498,6 @@ function EnvironmentSimpleTable({
   );
 }
 
-function CommentsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      {revision.comments.length === 0 ? (
-        <EmptyState title="No comments" body="Comments will appear here as scenario collaborators discuss objects." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Object</Th>
-              <Th>Comment</Th>
-              <Th>Author</Th>
-              <Th>Created</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {revision.comments.map((comment) => {
-              const target = objectPath(revision.id, comment.objectType, comment.objectId);
-              return (
-                <ClickableRow
-                  key={comment.id}
-                  to={target}
-                  aria-label={`Open ${objectLabel(comment.objectType)} ${comment.objectId}`}
-                >
-                  <Td className="font-mono">
-                    <Link to={target} className="hover:underline">
-                      {comment.objectType}:{comment.objectId}
-                    </Link>
-                  </Td>
-                  <Td className="min-w-[460px] whitespace-pre-wrap text-muted-foreground">
-                    {comment.body}
-                    {comment.edited ? <span className="ml-2 text-xs">(edited)</span> : null}
-                  </Td>
-                  <Td>{comment.author}</Td>
-                  <Td className="text-muted-foreground">{formatDate(comment.createdAt)}</Td>
-                </ClickableRow>
-              );
-            })}
-          </tbody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
-function DecisionsTable({ revision }: Readonly<{ revision: RevisionWorkspace }>) {
-  return (
-    <Card className="overflow-hidden py-0">
-      {revision.decisions.length === 0 ? (
-        <EmptyState title="No decisions" body="Decisions are currently append-only review records, not votes." />
-      ) : (
-        <Table>
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Object</Th>
-              <Th>Decision</Th>
-              <Th>Rationale</Th>
-              <Th>Author</Th>
-              <Th>Created</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {revision.decisions.map((decision) => {
-              const target = objectPath(revision.id, decision.objectType, decision.objectId);
-              return (
-                <ClickableRow
-                  key={decision.id}
-                  to={target}
-                  aria-label={`Open ${objectLabel(decision.objectType)} ${decision.objectId}`}
-                >
-                  <Td className="font-mono">
-                    <Link to={target} className="hover:underline">
-                      {decision.objectType}:{decision.objectId}
-                    </Link>
-                  </Td>
-                  <Td>
-                    <Badge>{decision.decision}</Badge>
-                  </Td>
-                  <Td className="min-w-[420px] whitespace-normal text-muted-foreground">
-                    {decision.rationale || "—"}
-                  </Td>
-                  <Td>{decision.author}</Td>
-                  <Td className="text-muted-foreground">{formatDate(decision.createdAt)}</Td>
-                </ClickableRow>
-              );
-            })}
-          </tbody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
 function SummaryCard({ label, value }: Readonly<{ label: string; value: string | number }>) {
   return (
     <Card className="p-4">
@@ -1044,20 +505,4 @@ function SummaryCard({ label, value }: Readonly<{ label: string; value: string |
       <div className="mt-1 text-lg font-semibold">{value}</div>
     </Card>
   );
-}
-
-function readinessScore(readiness: Record<string, boolean>) {
-  const entries = Object.values(readiness);
-  if (entries.length === 0) return "—";
-  const ready = entries.filter(Boolean).length;
-  return `${ready}/${entries.length}`;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-function objectLabel(objectType: string) {
-  if (objectType === "step") return "module";
-  return objectType;
 }
