@@ -1,10 +1,7 @@
+import { Graph, layout } from "@dagrejs/dagre";
 import {
-  Background,
-  BackgroundVariant,
   Controls,
   Handle,
-  MarkerType,
-  MiniMap,
   Position,
   ReactFlow,
   type Edge,
@@ -18,96 +15,73 @@ import {
   Network,
   Server,
   Shield,
-  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo } from "react";
 
 import type {
-  TopologyAgent,
   TopologyInfrastructure,
   TopologyNode,
   TopologyRelationship,
 } from "@/api/client";
-import { Badge } from "@/components/ui";
 
 type NetworkDiagramProps = Readonly<{
   infrastructure: TopologyInfrastructure[];
   relationships: TopologyRelationship[];
   systems: TopologyNode[];
-  agents: TopologyAgent[];
 }>;
 
-type SegmentData = {
-  kind: "segment";
+type SubnetData = {
+  kind: "subnet";
   label: string;
   cidr: string;
-  gateway: string;
-  description: string;
-  hostCount: number;
 };
 
-type SystemData = {
-  kind: "system";
+type HostData = {
+  kind: "host";
   label: string;
-  description: string;
-  type: string;
-  os: string;
-  services: TopologyNode["services"];
+  system: TopologyNode;
 };
 
-type ActorData = {
-  kind: "actor";
+type DiagramData = SubnetData | HostData;
+type SubnetLayout = {
+  id: string;
   label: string;
-  description: string;
+  cidr: string;
+  systems: TopologyNode[];
+  width: number;
+  height: number;
 };
 
-type DiagramData = SegmentData | SystemData | ActorData;
+const SUBNET_WIDTH = 240;
+const SUBNET_HEADER_HEIGHT = 54;
+const HOST_WIDTH = 102;
+const HOST_HEIGHT = 50;
+const HOST_GAP = 10;
+const SUBNET_PADDING = 10;
 
-const SEGMENT_WIDTH = 456;
-const SYSTEM_WIDTH = 204;
-const SYSTEM_HEIGHT = 82;
-const SEGMENT_HEADER_HEIGHT = 88;
-const SYSTEM_GAP = 12;
-const GRID_COLUMNS = 3;
-const COLUMN_GAP = 64;
-const ROW_GAP = 54;
-
-export function NetworkDiagram({ infrastructure, relationships, systems, agents }: NetworkDiagramProps) {
+export function NetworkDiagram({ infrastructure, relationships, systems }: NetworkDiagramProps) {
   const { nodes, edges } = useMemo(
-    () => buildDiagram(infrastructure, relationships, systems, agents),
-    [agents, infrastructure, relationships, systems],
+    () => buildDiagram(infrastructure, relationships, systems),
+    [infrastructure, relationships, systems],
   );
 
   return (
-    <div className="h-[760px] overflow-hidden rounded-lg border border-border bg-background">
+    <div className="h-[600px] overflow-hidden rounded-lg border border-border bg-background">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
-        minZoom={0.35}
-        maxZoom={1.75}
+        fitViewOptions={{ padding: 0.12, maxZoom: 1.15 }}
+        minZoom={0.3}
+        maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
-        elevateEdgesOnSelect
+        elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="var(--border)" />
-        <MiniMap
-          pannable
-          zoomable
-          nodeColor={(node) => (node.type === "segment" ? "#2f6f70" : node.type === "actor" ? "#b78342" : "#64748b")}
-          maskColor="rgba(9, 12, 16, 0.72)"
-        />
         <Controls showInteractive={false} />
-        <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-3 rounded-md border border-border bg-card/95 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
-          <Legend icon={Network} label="Subnet" />
-          <Legend icon={Server} label="System" />
-          <Legend icon={UserRound} label="Actor" />
-          <span>Arrows show allowed network relationships</span>
-        </div>
       </ReactFlow>
     </div>
   );
@@ -117,302 +91,218 @@ function buildDiagram(
   infrastructure: TopologyInfrastructure[],
   relationships: TopologyRelationship[],
   systems: TopologyNode[],
-  agents: TopologyAgent[],
 ): { nodes: Node<DiagramData>[]; edges: Edge[] } {
-  const segments = infrastructure.filter((item) => item.cidr || item.type === "switch");
-  const segmentIds = new Set(segments.map((segment) => segment.id));
-  const systemsBySegment = new Map<string, TopologyNode[]>();
-  const unassigned: TopologyNode[] = [];
+  const subnets = infrastructure.filter((item) => item.type === "switch" && item.cidr);
+  const subnetIds = new Set(subnets.map((subnet) => subnet.id));
+  const hosts = systems.filter((system) => system.type !== "switch");
+  const systemsBySubnet = assignSystemsToSubnets(hosts, subnetIds);
 
-  for (const system of systems.filter((node) => node.type !== "switch")) {
-    const segmentId = system.networks.find((network) => segmentIds.has(network));
-    if (segmentId) {
-      const members = systemsBySegment.get(segmentId) ?? [];
-      members.push(system);
-      systemsBySegment.set(segmentId, members);
-    } else {
-      unassigned.push(system);
-    }
+  const subnetLayouts: SubnetLayout[] = subnets.map((subnet) => {
+    const members = (systemsBySubnet.get(subnet.id) ?? []).sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+    return {
+      id: subnet.id,
+      label: humanize(subnet.id),
+      cidr: subnet.cidr,
+      systems: members,
+      width: SUBNET_WIDTH,
+      height: subnetHeight(members.length),
+    };
+  });
+
+  const unassigned = systemsBySubnet.get("") ?? [];
+  if (unassigned.length) {
+    subnetLayouts.push({
+      id: "unassigned",
+      label: "Unassigned",
+      cidr: "",
+      systems: unassigned.sort((left, right) => left.id.localeCompare(right.id)),
+      width: SUBNET_WIDTH,
+      height: subnetHeight(unassigned.length),
+    });
   }
 
-  const positions = layoutSegments(segments, relationships, systemsBySegment);
+  const connections = uniqueSubnetConnections(relationships, subnetIds);
+  const positions = layoutSubnets(subnetLayouts, connections);
   const nodes: Node<DiagramData>[] = [];
 
-  for (const segment of segments) {
-    const members = (systemsBySegment.get(segment.id) ?? []).sort((a, b) => a.id.localeCompare(b.id));
-    const height = segmentHeight(members.length);
+  for (const subnet of subnetLayouts) {
+    const subnetNodeId = `subnet:${subnet.id}`;
     nodes.push({
-      id: segment.id,
-      type: "segment",
-      position: positions.get(segment.id) ?? { x: 0, y: 0 },
-      data: {
-        kind: "segment",
-        label: segment.id,
-        cidr: segment.cidr,
-        gateway: segment.gateway,
-        description: segment.description,
-        hostCount: members.length,
-      },
-      style: { width: SEGMENT_WIDTH, height },
+      id: subnetNodeId,
+      type: "subnet",
+      position: positions.get(subnet.id) ?? { x: 0, y: 0 },
+      data: { kind: "subnet", label: subnet.label, cidr: subnet.cidr },
+      style: { width: subnet.width, height: subnet.height },
       zIndex: 0,
     });
-    for (const [index, system] of members.entries()) {
+
+    for (const [index, system] of subnet.systems.entries()) {
       nodes.push({
-        id: `system:${system.id}`,
-        type: "system",
-        parentId: segment.id,
+        id: `host:${system.id}`,
+        type: "host",
+        parentId: subnetNodeId,
         extent: "parent",
         position: {
-          x: 18 + (index % 2) * (SYSTEM_WIDTH + SYSTEM_GAP),
-          y: SEGMENT_HEADER_HEIGHT + Math.floor(index / 2) * (SYSTEM_HEIGHT + SYSTEM_GAP),
+          x: SUBNET_PADDING + (index % 2) * (HOST_WIDTH + HOST_GAP),
+          y: SUBNET_HEADER_HEIGHT + Math.floor(index / 2) * (HOST_HEIGHT + HOST_GAP),
         },
-        data: systemData(system),
-        style: { width: SYSTEM_WIDTH, height: SYSTEM_HEIGHT },
+        data: { kind: "host", label: humanize(system.id), system },
+        style: { width: HOST_WIDTH, height: HOST_HEIGHT },
         zIndex: 2,
       });
     }
   }
 
-  const maxX = Math.max(0, ...Array.from(positions.values(), (position) => position.x));
-  for (const [index, system] of unassigned.sort((a, b) => a.id.localeCompare(b.id)).entries()) {
-    nodes.push({
-      id: `system:${system.id}`,
-      type: "system",
-      position: { x: maxX + SEGMENT_WIDTH + COLUMN_GAP, y: 128 + index * (SYSTEM_HEIGHT + SYSTEM_GAP) },
-      data: systemData(system),
-      style: { width: SYSTEM_WIDTH, height: SYSTEM_HEIGHT },
-    });
-  }
+  const edges: Edge[] = connections.map(({ source, target }) => ({
+    id: `connection:${source}:${target}`,
+    source: `subnet:${source}`,
+    target: `subnet:${target}`,
+    type: "smoothstep",
+    style: { stroke: "#64748b", strokeWidth: 1.5 },
+    zIndex: 1,
+  }));
 
-  const rootSegment = segments.find((segment) => segment.id.includes("participant"))?.id ?? segments[0]?.id;
-  const rootPosition = rootSegment ? positions.get(rootSegment) : undefined;
-  for (const [index, agent] of agents.entries()) {
-    nodes.push({
-      id: `actor:${agent.id}`,
-      type: "actor",
-      position: {
-        x: (rootPosition?.x ?? 0) + 24 + index * 232,
-        y: Math.max(0, (rootPosition?.y ?? 128) - 116),
-      },
-      data: { kind: "actor", label: agent.id, description: agent.description },
-      style: { width: 220 },
-      zIndex: 3,
-    });
-  }
-
-  const edges = relationshipEdges(relationships, segmentIds);
-  for (const agent of agents) {
-    for (const host of agent.initial_hosts) {
-      if (systems.some((system) => system.id === host)) {
-        edges.push({
-          id: `actor:${agent.id}:${host}`,
-          source: `actor:${agent.id}`,
-          target: `system:${host}`,
-          type: "smoothstep",
-          markerEnd: { type: MarkerType.ArrowClosed, color: "#b78342" },
-          style: { stroke: "#b78342", strokeWidth: 1.7, strokeDasharray: "5 4" },
-          label: "starts at",
-          labelStyle: { fill: "#b78342", fontSize: 11 },
-          zIndex: 4,
-        });
-      }
-    }
-  }
   return { nodes, edges };
 }
 
-function layoutSegments(
-  segments: TopologyInfrastructure[],
+function assignSystemsToSubnets(systems: TopologyNode[], subnetIds: Set<string>) {
+  const assigned = new Map<string, TopologyNode[]>();
+  for (const system of systems) {
+    const subnetId = system.networks.find((network) => subnetIds.has(shortRef(network))) ?? "";
+    const normalizedSubnetId = shortRef(subnetId);
+    assigned.set(normalizedSubnetId, [...(assigned.get(normalizedSubnetId) ?? []), system]);
+  }
+  return assigned;
+}
+
+function uniqueSubnetConnections(
   relationships: TopologyRelationship[],
-  systemsBySegment: Map<string, TopologyNode[]>,
-) {
-  const ids = new Set(segments.map((segment) => segment.id));
-  const adjacency = new Map<string, Set<string>>();
-  for (const id of ids) adjacency.set(id, new Set());
+  subnetIds: Set<string>,
+): Array<{ source: string; target: string }> {
+  const connections = new Map<string, { source: string; target: string }>();
   for (const relationship of relationships) {
     const source = shortRef(relationship.source);
     const target = shortRef(relationship.target);
-    if (source !== target && ids.has(source) && ids.has(target)) {
-      adjacency.get(source)?.add(target);
-      adjacency.get(target)?.add(source);
-    }
+    if (source === target || !subnetIds.has(source) || !subnetIds.has(target)) continue;
+    const key = [source, target].sort().join("::");
+    if (!connections.has(key)) connections.set(key, { source, target });
+  }
+  return [...connections.values()];
+}
+
+function layoutSubnets(
+  subnets: SubnetLayout[],
+  connections: Array<{ source: string; target: string }>,
+) {
+  const graph = new Graph().setDefaultEdgeLabel(() => ({}));
+  graph.setGraph({ rankdir: "TB", ranksep: 54, nodesep: 36, edgesep: 20, marginx: 16, marginy: 16 });
+  for (const subnet of subnets) graph.setNode(subnet.id, { width: subnet.width, height: subnet.height });
+  for (const connection of spanningForest(subnets, connections)) {
+    graph.setEdge(connection.source, connection.target);
+  }
+  layout(graph);
+
+  return new Map(
+    subnets.map((subnet) => {
+      const position = graph.node(subnet.id) as { x: number; y: number };
+      return [subnet.id, { x: position.x - subnet.width / 2, y: position.y - subnet.height / 2 }];
+    }),
+  );
+}
+
+function spanningForest(
+  subnets: SubnetLayout[],
+  connections: Array<{ source: string; target: string }>,
+) {
+  const adjacency = new Map(subnets.map((subnet) => [subnet.id, new Set<string>()]));
+  for (const { source, target } of connections) {
+    adjacency.get(source)?.add(target);
+    adjacency.get(target)?.add(source);
   }
 
-  const root = segments.find((segment) => segment.id.includes("participant"))?.id ?? segments[0]?.id;
-  const depth = new Map<string, number>();
-  if (root) {
-    depth.set(root, 0);
+  const preferredRoot = subnets.find((subnet) => subnet.id.includes("participant"))?.id;
+  const roots = [preferredRoot, ...subnets.map((subnet) => subnet.id)].filter(
+    (id): id is string => Boolean(id),
+  );
+  const visited = new Set<string>();
+  const tree: Array<{ source: string; target: string }> = [];
+
+  for (const root of roots) {
+    if (visited.has(root)) continue;
+    visited.add(root);
     const queue = [root];
     while (queue.length) {
-      const current = queue.shift()!;
-      for (const neighbor of adjacency.get(current) ?? []) {
-        if (!depth.has(neighbor)) {
-          depth.set(neighbor, (depth.get(current) ?? 0) + 1);
-          queue.push(neighbor);
-        }
+      const source = queue.shift()!;
+      for (const target of adjacency.get(source) ?? []) {
+        if (visited.has(target)) continue;
+        visited.add(target);
+        queue.push(target);
+        tree.push({ source, target });
       }
     }
   }
-  const disconnectedDepth = Math.max(0, ...depth.values()) + 1;
-  for (const id of ids) if (!depth.has(id)) depth.set(id, disconnectedDepth);
-
-  const orderedIds = [...segments]
-    .sort((left, right) => {
-      const depthDelta = (depth.get(left.id) ?? disconnectedDepth) - (depth.get(right.id) ?? disconnectedDepth);
-      if (depthDelta) return depthDelta;
-      const degreeDelta = (adjacency.get(right.id)?.size ?? 0) - (adjacency.get(left.id)?.size ?? 0);
-      return degreeDelta || left.id.localeCompare(right.id);
-    })
-    .map((segment) => segment.id);
-
-  const positions = new Map<string, { x: number; y: number }>();
-  const rowHeights: number[] = [];
-  for (let index = 0; index < orderedIds.length; index += GRID_COLUMNS) {
-    rowHeights.push(
-      Math.max(
-        ...orderedIds
-          .slice(index, index + GRID_COLUMNS)
-          .map((id) => segmentHeight(systemsBySegment.get(id)?.length ?? 0)),
-      ),
-    );
-  }
-  let rowY = 128;
-  for (const [index, id] of orderedIds.entries()) {
-    const row = Math.floor(index / GRID_COLUMNS);
-    const column = index % GRID_COLUMNS;
-    if (column === 0 && row > 0) rowY += rowHeights[row - 1] + ROW_GAP;
-    positions.set(id, { x: column * (SEGMENT_WIDTH + COLUMN_GAP), y: rowY });
-  }
-  return positions;
+  return tree;
 }
 
-function relationshipEdges(relationships: TopologyRelationship[], segmentIds: Set<string>): Edge[] {
-  const grouped = new Map<string, TopologyRelationship[]>();
-  for (const relationship of relationships) {
-    const source = shortRef(relationship.source);
-    const target = shortRef(relationship.target);
-    if (source === target || !segmentIds.has(source) || !segmentIds.has(target)) continue;
-    const key = [source, target].sort().join("::");
-    grouped.set(key, [...(grouped.get(key) ?? []), relationship]);
-  }
-
-  return [...grouped.entries()].map(([key, rows]) => {
-    const [groupSource, groupTarget] = key.split("::");
-    const directions = new Set(rows.map((row) => `${shortRef(row.source)}>${shortRef(row.target)}`));
-    const bidirectional = directions.size > 1;
-    const source = bidirectional ? groupSource : shortRef(rows[0].source);
-    const target = bidirectional ? groupTarget : shortRef(rows[0].target);
-    const categories = [...new Set(rows.map((row) => row.category).filter(Boolean))];
-    const ports = [...new Set(rows.map((row) => row.ports).filter(Boolean))];
-    return {
-      id: `relationship:${key}`,
-      source,
-      target,
-      type: "smoothstep",
-      markerStart: bidirectional ? { type: MarkerType.ArrowClosed, color: "#4d9393" } : undefined,
-      markerEnd: { type: MarkerType.ArrowClosed, color: "#4d9393" },
-      style: { stroke: "#4d9393", strokeWidth: 1.8 },
-      label: [categories.join(" / "), ports.length ? `:${ports.join(" · ")}` : ""].filter(Boolean).join(" "),
-      labelStyle: { fill: "#94a3b8", fontSize: 10 },
-      labelBgStyle: { fill: "#11161d", fillOpacity: 0.92 },
-      labelBgPadding: [5, 3] as [number, number],
-      labelBgBorderRadius: 4,
-      zIndex: 1,
-    };
-  });
-}
-
-function SegmentNode({ data }: NodeProps) {
-  const segment = data as SegmentData;
+function SubnetNode({ data }: NodeProps) {
+  const subnet = data as SubnetData;
   return (
-    <div className="h-full w-full rounded-xl border-2 border-teal-700/70 bg-teal-950/20 shadow-lg shadow-black/10">
-      <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !border-teal-300 !bg-teal-700" />
-      <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !border-teal-300 !bg-teal-700" />
-      <div className="flex items-start gap-3 border-b border-teal-800/60 px-4 py-3">
-        <span className="rounded-md bg-teal-900/60 p-2 text-teal-200"><Network size={18} /></span>
-        <div className="min-w-0">
-          <div className="truncate font-mono text-sm font-semibold text-foreground">{segment.label}</div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {segment.cidr ? <Badge>{segment.cidr}</Badge> : null}
-            {segment.gateway ? <span className="font-mono text-[10px] text-muted-foreground">GW {segment.gateway}</span> : null}
-          </div>
-        </div>
-      </div>
-      {segment.hostCount === 0 ? (
-        <p className="px-4 py-3 text-xs text-muted-foreground">No systems assigned</p>
-      ) : null}
-    </div>
-  );
-}
-
-function SystemNode({ data }: NodeProps) {
-  const system = data as SystemData;
-  const Icon = systemIcon(system);
-  return (
-    <div className="h-full rounded-lg border border-border bg-card px-3 py-2.5 shadow-md">
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-slate-300 !bg-slate-600" />
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-slate-300 !bg-slate-600" />
-      <div className="flex gap-2.5">
-        <span className="mt-0.5 text-muted-foreground"><Icon size={17} /></span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-mono text-xs font-semibold text-foreground">{system.label}</div>
-          <div className="mt-1 truncate text-[10px] text-muted-foreground">
-            {system.services.length
-              ? system.services.slice(0, 2).map((service) => `${service.id}${service.port ? `:${service.port}` : ""}`).join(" · ")
-              : system.os || system.type}
-          </div>
-          <div className="mt-1 line-clamp-2 text-[10px] leading-4 text-muted-foreground">{system.description}</div>
-        </div>
+    <div className="h-full w-full rounded-lg border border-dashed border-border bg-card/45">
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+      <div className="flex h-[46px] items-center gap-2 border-b border-border px-3">
+        <Network size={15} className="shrink-0 text-muted-foreground" />
+        <span className="truncate text-xs font-medium text-foreground">{subnet.label}</span>
+        {subnet.cidr ? (
+          <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">{subnet.cidr}</span>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function ActorNode({ data }: NodeProps) {
-  const actor = data as ActorData;
+function HostNode({ data }: NodeProps) {
+  const host = data as HostData;
+  const Icon = systemIcon(host.system);
   return (
-    <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 shadow-md">
-      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-amber-300 !bg-amber-700" />
-      <div className="flex items-center gap-2 font-mono text-sm font-semibold"><UserRound size={17} />{actor.label}</div>
-      <p className="mt-2 text-xs leading-4 text-muted-foreground">{actor.description}</p>
+    <div className="flex h-full items-center gap-2 rounded-md border border-border bg-card px-2.5 shadow-sm">
+      <Icon size={17} className="shrink-0 text-muted-foreground" />
+      <span className="line-clamp-2 text-[11px] font-medium leading-4 text-foreground">{host.label}</span>
     </div>
   );
 }
 
-function systemData(system: TopologyNode): SystemData {
-  return {
-    kind: "system",
-    label: system.id,
-    description: system.description,
-    type: system.type,
-    os: system.os,
-    services: system.services,
-  };
-}
-
-function systemIcon(system: SystemData): LucideIcon {
-  const value = `${system.label} ${system.services.map((service) => service.id).join(" ")}`;
-  if (/workstation|desktop|notebook|jupyter/i.test(value)) return Monitor;
-  if (/database|postgres|dataset|store|registry|artifact/i.test(value)) return Database;
-  if (/model|inference|ai-/i.test(value)) return BrainCircuit;
-  if (/policy|identity|guardrail|proof/i.test(value)) return Shield;
+function systemIcon(system: TopologyNode): LucideIcon {
+  const value = `${system.id} ${system.role} ${system.services.map((service) => service.id).join(" ")}`;
+  if (/workstation|desktop|notebook|portal/i.test(value)) return Monitor;
+  if (/database|dataset|store|registry|artifact|repo/i.test(value)) return Database;
+  if (/model|inference|distillation|ai-/i.test(value)) return BrainCircuit;
+  if (/policy|identity|idp|guardrail|proof|telemetry/i.test(value)) return Shield;
   return Server;
 }
 
-function segmentHeight(hostCount: number) {
-  return SEGMENT_HEADER_HEIGHT + Math.ceil(Math.max(1, hostCount) / 2) * (SYSTEM_HEIGHT + SYSTEM_GAP) + 14;
+function subnetHeight(hostCount: number) {
+  const rows = Math.max(1, Math.ceil(hostCount / 2));
+  return SUBNET_HEADER_HEIGHT + rows * HOST_HEIGHT + (rows - 1) * HOST_GAP + SUBNET_PADDING;
+}
+
+function humanize(value: string) {
+  return value
+    .replace(/^infrastructure\./, "")
+    .replace(/-\d+$/, "")
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function shortRef(value: string) {
   return value.replace(/^infrastructure\./, "");
 }
 
-function Legend({ icon: Icon, label }: Readonly<{ icon: LucideIcon; label: string }>) {
-  return <span className="flex items-center gap-1.5"><Icon size={13} />{label}</span>;
-}
-
 const nodeTypes = {
-  segment: SegmentNode,
-  system: SystemNode,
-  actor: ActorNode,
+  subnet: SubnetNode,
+  host: HostNode,
 };

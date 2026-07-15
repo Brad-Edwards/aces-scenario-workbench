@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login, logout
+from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import PasswordChangeForm
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
@@ -97,10 +98,16 @@ def _export_payload(user: User) -> dict[str, Any]:
 
 
 @login_required
-@require_GET
+@require_http_methods(["GET", "POST"])
 def account(request: HttpRequest) -> HttpResponse:
-    """The signed-in user's account: data export and deletion."""
-    return render(request, "accounts/account.html")
+    """The signed-in user's profile and account controls."""
+    password_form = PasswordChangeForm(request.user, request.POST or None)
+    if request.method == "POST" and password_form.is_valid():
+        user = password_form.save()
+        update_session_auth_hash(request, user)
+        messages.success(request, "Your password has been changed.")
+        return redirect("account")
+    return render(request, "accounts/account.html", {"password_form": password_form})
 
 
 @login_required
