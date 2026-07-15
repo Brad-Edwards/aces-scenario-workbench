@@ -11,6 +11,15 @@
   </dl>
 
   <section class="panel">
+    <h2>Change password</h2>
+    <form method="post" action="{% url 'account' %}" class="stacked-form">
+      {% csrf_token %}
+      {{ password_form.as_p }}
+      <button type="submit">Change password</button>
+    </form>
+  </section>
+
+  <section class="panel">
     <h2>Export your data</h2>
     <p>Download a copy of your personal data held by the workbench.</p>
     <p><a href="{% url 'account-export' %}">Download my data (JSON)</a></p>

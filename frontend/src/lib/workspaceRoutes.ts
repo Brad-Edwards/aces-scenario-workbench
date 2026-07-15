@@ -1,14 +1,9 @@
 export type WorkspaceTab =
   | "challenges"
   | "topology"
-  | "schedule"
   | "modules"
   | "techniques"
-  | "evidence"
-  | "scoring"
-  | "environment"
-  | "comments"
-  | "decisions";
+  | "environment";
 
 export function revisionPath(revisionId: number | string, tab?: WorkspaceTab) {
   const base = `/app/revisions/${encodeURIComponent(String(revisionId))}`;
@@ -44,6 +39,6 @@ export function objectPath(revisionId: number | string, objectType: string, obje
     case "tactic":
       return revisionPath(revisionId, "techniques");
     default:
-      return revisionPath(revisionId, "comments");
+      return revisionPath(revisionId, "challenges");
   }
 }

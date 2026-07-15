@@ -209,7 +209,7 @@ function EvidenceDetail({
         revision={revision}
         title={evidence.id}
         description="Evidence object"
-        backTab="evidence"
+        backTab="techniques"
       />
 
       <div className={hasActivity ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]" : ""}>

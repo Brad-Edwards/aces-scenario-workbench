@@ -53,6 +53,9 @@ PACK_METADATA_PATH = "pack.yaml"
 CHALLENGE_PORTFOLIO_PATH = "docs/challenge-portfolio.md"
 SDL_LOCAL_PREFIX = "local:"
 SDL_PARSER_ISSUE = "https://github.com/Brad-Edwards/aces/issues/767"
+SDL_IMPLEMENTED_CHALLENGE_STATUSES = frozenset(
+    {"source-implemented", "automated-proven", "participant-proven"}
+)
 SDL_MAPPING_SECTIONS = (
     "nodes",
     "infrastructure",
@@ -1493,7 +1496,7 @@ def _sdl_challenge_flag_id(spec_id: str, extension: dict[str, Any]) -> str:
 
 
 def _sdl_challenge_implemented(extension: dict[str, Any]) -> bool:
-    return _text(extension, "implementation_status") == "source-implemented"
+    return _text(extension, "implementation_status") in SDL_IMPLEMENTED_CHALLENGE_STATUSES
 
 
 def _sdl_challenge_metadata(
