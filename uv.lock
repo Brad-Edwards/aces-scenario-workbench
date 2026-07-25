@@ -10,7 +10,7 @@ resolution-markers = [
 
 [[package]]
 name = "aces-sdl"
-version = "0.20.0"
+version = "0.23.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asyncssh" },
@@ -28,9 +28,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/aa/99/b7a686060d9e4b5d3df8592f1cd34c0f71aeb805685c69172ffc2d4dd0a1/aces_sdl-0.20.0.tar.gz", hash = "sha256:f816b824c76e6388b5a15971237b499bc8c04576ba62b10f7dfa597f8895dbcf", size = 1561396, upload-time = "2026-07-13T02:50:47.396Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/71/c3923fc8713fbab0baf779c902ac82a6030793e98e1219eec0f35e0a321e/aces_sdl-0.23.1.tar.gz", hash = "sha256:0a53f680c5b2420554cc3f6053ba64d0f4ef919a73337ab060f5dc283295bc0d", size = 1674846, upload-time = "2026-07-17T04:06:34.594Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/a5/d1f9bc0227648627b6f9b715dbbd0e9df08e9120ac05e41913adef13b8b3/aces_sdl-0.20.0-py3-none-any.whl", hash = "sha256:2fd9956166326910a3ad439073589fb68c59eb9465d77e06a6890482428e9426", size = 1359387, upload-time = "2026-07-13T02:50:45.393Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/b4/77b40bb8214385c243d187d04614175b0f1a162ec7183a5143c016c06be6/aces_sdl-0.23.1-py3-none-any.whl", hash = "sha256:86f5e99d2dff009fe7165bbe8853f6fdf5a41074e7813f2e38e092910c1147a1", size = 1466167, upload-time = "2026-07-17T04:06:32.749Z" },
 ]
 
 [[package]]
@@ -70,7 +70,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aces-sdl", specifier = "==0.20.0" },
+    { name = "aces-sdl", specifier = "==0.23.1" },
     { name = "dj-database-url", specifier = ">=2.2" },
     { name = "django", specifier = ">=5.1,<6" },
     { name = "django-axes", specifier = ">=7.0" },
