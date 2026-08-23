@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
       - name: Export locked runtime dependencies
         run: uv export --frozen --no-dev --all-extras --no-emit-project --no-hashes --format requirements-txt -o audit-requirements.txt
       # The export is already a fully resolved tree, so --no-deps audits the pins
@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
       - name: Lint
         run: uv run ruff check .
       - name: Format check
